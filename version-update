@@ -1,0 +1,18 @@
+#!/bin/sh
+#----------------------------------------------------------------------
+# Usage:
+# version-update ~/posso/cmm
+# ----------------------------------------------------------------------
+set -a
+CMMDIR=/project/posso/cmm/curr
+PATCHN=`cat ${CMMDIR}/patch/number`
+echo '(@ PATCHN = ${PATCHN} + 1 ; unset noclobber ; \
+	echo  ${PATCHN} > ${CMMDIR}/patch/number)' | /bin/csh ;
+mkdir backup backup/doc
+mv $1/*~ backup
+mv $1/doc/*~ backup/doc
+diff -c $1 ${CMMDIR}/cmm > ${CMMDIR}/patch/patch-${PATCHN}
+cp -pr $1 ${CMMDIR}
+mv backup/*~ $1
+mv backup/doc/*~ $1/doc
+rm -fr backup

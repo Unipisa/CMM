@@ -1,50 +1,56 @@
 diff -c /home/omega/attardi/posso/cmm/ChangeLog /project/posso/cmm/curr/cmm/ChangeLog
-*** /home/omega/attardi/posso/cmm/ChangeLog	Fri Mar 28 20:20:58 1997
---- /project/posso/cmm/curr/cmm/ChangeLog	Thu Mar  6 20:30:31 1997
+*** /home/omega/attardi/posso/cmm/ChangeLog	Tue Mar  3 15:21:22 1998
+--- /project/posso/cmm/curr/cmm/ChangeLog	Fri Nov  7 19:45:55 1997
 ***************
-*** 1,32 ****
-- Fri Mar 28 19:45:24 1997  Giuseppe Attardi  <attardi@omega>
+*** 1,23 ****
+- 1998-03-03  Giuseppe Attardi  <attardi@di.unipi.it>
 - 
-- 	* cmm.cpp (collect): revised to use roots.begin() and roots.get()
-- 	to scan registered roots.
-- 	Bartlett version was buggy, since it did not check that an entry
-- 	had proper values for .addr and .bytes. They are not set to 0 on linux.
+- 	* version 1.9g released.
+- 	
+- 	* cmm.h (OUTSIDE_HEAPS): checks both NOHEAP and UNCOLLECTEDHEAP
 - 
-- 	    for (int i = 0; i < rootsCount; i++)
-- 	      {
-- 	    	fp = roots[i].addr;
-- 		for (int j = roots[i].bytes; j > 0; j = j - bytesPerWord)
-- 		  promotePage((GCP)*fp++);
-- 	      }
+- 1998-03-02  Giuseppe Attardi  <attardi@di.unipi.it>
 - 
-- 	* cmm.h (Set): revised (no longer uses member count)
+- 	* cmm.h, cmm.cpp: added allocAtomic() to allocate block not
+- 	containing pointers.
 - 
-- 	* cmm.cpp (RootAreas): revised to make it similar to Set above
-- 	(added begin() and get()). It also clears the new array.
+- Tue Feb  3 11:46:48 1998  Giuseppe Attardi  <attardi@omega>
 - 
+- 	* cmm.cpp (expandHeap): fix for Linux: fill gap between old and
+- 	new heap.
 - 
-- Mon Mar 24 21:34:38 1997  Giuseppe Attardi  <attardi@omega>
+- Wed Jan 28 11:37:11 1998  Giuseppe Attardi  <attardi@omega>
 - 
-- 	* cmm.h (Set): added initialization for entries and test before
-- 	delete in insert()
+- 	* cmm.h (WHEN_FLAGS): added {}
 - 
-- Mon Mar 10 18:12:02 1997  Giuseppe Attardi  <attardi@omega>
-- 
-- 	* cmm.h: added declaration for registerRootArea and unregisterRootArea
-- 
-  Thu Mar  6 20:28:35 1997  Giuseppe Attardi  <attardi@omega>
+  Fri Nov  7 10:40:42 1997  Giuseppe Attardi  <attardi@omega>
   
-  	* cmm.cpp (expandHeap): fixed for Linux ELF
+  	* cmm.cpp (verifyHeader): fixed to deal with SCANNED pages.
 --- 1,3 ----
+Common subdirectories: /home/omega/attardi/posso/cmm/Parallel and /project/posso/cmm/curr/cmm/Parallel
+diff -c /home/omega/attardi/posso/cmm/README /project/posso/cmm/curr/cmm/README
+*** /home/omega/attardi/posso/cmm/README	Sun Mar  1 11:17:08 1998
+--- /project/posso/cmm/curr/cmm/README	Fri Nov  7 10:39:52 1997
+***************
+*** 53,60 ****
+   - AIX (RS6000)
+   - SGI
+   - Win32 (Windows 95, Windows NT)
+-  - Digital OS (Alpha)
+-  - MacOS (Metrowerks C++)
+  
+  but it should run without changes also on HPUX, NeXTOS and DOS (djgpp).
+  If you are interest in some other platforms you can send mail to
+--- 53,58 ----
 diff -c /home/omega/attardi/posso/cmm/cmm.cpp /project/posso/cmm/curr/cmm/cmm.cpp
-*** /home/omega/attardi/posso/cmm/cmm.cpp	Fri Mar 28 20:04:32 1997
---- /project/posso/cmm/curr/cmm/cmm.cpp	Thu Mar  6 20:32:10 1997
+*** /home/omega/attardi/posso/cmm/cmm.cpp	Tue Mar  3 14:59:21 1998
+--- /project/posso/cmm/curr/cmm/cmm.cpp	Fri Nov  7 19:52:54 1997
 ***************
 *** 54,60 ****
   
   /* Version tag */
   
-! char*  Cmm::version = "CMM 1.8.5";
+! char*  Cmm::version = "CMM 1.9g";
   
   /*---------------------------------------------------------------------------*
    *
@@ -52,360 +58,221 @@ diff -c /home/omega/attardi/posso/cmm/cmm.cpp /project/posso/cmm/curr/cmm/cmm.cp
   
   /* Version tag */
   
-! char*  Cmm::version = "CMM 1.8.4";
+! char*  Cmm::version = "CMM 1.9e";
   
   /*---------------------------------------------------------------------------*
    *
 ***************
-*** 286,362 ****
-   public:
-    RootAreas()
-      {
-        max = 0;
-        free = 0;
--       entries = NULL;
+*** 901,915 ****
+  	new_pageHeap[i] = UNCOLLECTEDHEAP;
       }
-  
-!   void insert(void * addr, int bytes)
-      {
-  #     define	    setIncrement 10
--       int i;
-  
-        if (free)
-  	{
-! 	  for (i = 0; i < max; i++)
-  	    if (entries[i].addr == NULL)
-! 	      break;
-  	}
-!       else
-  	{
-  	  RootArea  *np;
-- 	  int count = max;
-  	  max += setIncrement;
-- 	  free = setIncrement;
-  	  np = ::new RootArea[max];
-! 	  for (i = 0; i < count; i++)
-  	    np[i] = entries[i];
-! 	  // clear the rest
-! 	  for (; i < max; i++)
-! 	    np[i].addr = NULL;
-! 	  if (entries) ::delete entries;
-  	  entries = np;
-- 	  i = count;
-  	}
-!       entries[i].addr = (GCP)addr;
-!       entries[i].bytes = bytes;
-!       free--;
-      }
-  
-!   void erase(void* addr)
-      {
-        int i;
-  
-!       for (i = 0; i < max; i++)
-  	if (entries[i].addr == addr)
-  	  {
-  	    entries[i].addr = NULL;
-  	    free++;
-  	    return;
-  	  }
-      }
-  
-!   RootArea* get()
+    else
 !     {
-!       // look for a non empty entry
-!       while (iter < max)
-! 	{
-! 	  if (entries[iter].addr)
-! 	    return &entries[iter++];
-! 	  else
-! 	    iter++;
-! 	}
-!       // No more entries;
-!       return (RootArea*)NULL;
-!     }
+!       /* Fill gap */
+!       Page gapStart = MIN(lastHeapPage, inc_lastHeapPage);
+!       Page gapEnd = MAX(firstHeapPage, inc_firstHeapPage);
 ! 
-!   void begin() { iter = 0;}
+!       for (i = gapStart + 1; i < gapEnd; i++)
+!         new_pageHeap[i] = UNCOLLECTEDHEAP;
+!       ::delete (char *)(pageSpace + firstHeapPage); // address of old tables
+!     }
   
-   private:
-!   RootArea*	entries;
-!   int		max;
-!   int		free;
-!   int		iter;
-  };
-  
-  static RootAreas	roots;	// areas registered as containing roots
---- 286,346 ----
-   public:
-    RootAreas()
-      {
-+       count = 0;
-        max = 0;
-        free = 0;
+    pageSpace = new_pageSpace;
+    pageLink = new_pageLink;
+--- 901,907 ----
+  	new_pageHeap[i] = UNCOLLECTEDHEAP;
       }
+    else
+!     ::delete (char *)(pageSpace + firstHeapPage); // address of old tables
   
-!   void add(void * addr, int bytes)
-      {
-  #     define	    setIncrement 10
-  
-        if (free)
-  	{
-! 	  for (int i = 0; i < count; i++)
-  	    if (entries[i].addr == NULL)
-! 	      {
-! 		entries[i].addr = (GCP)addr;
-! 		entries[i].bytes = bytes;
-! 		free--;
-! 		return;
-! 	      }
-  	}
-!       if (count == max)
-  	{
-  	  RootArea  *np;
-  	  max += setIncrement;
-  	  np = ::new RootArea[max];
-! 	  for (int i = 0; i < count; i++)
-  	    np[i] = entries[i];
-! 	  ::delete  entries;
-  	  entries = np;
-  	}
-!       entries[count].addr = (GCP)addr;
-!       entries[count],bytes = bytes;
-!       count++;
-      }
-  
-!   void remove(void* addr)
-      {
-        int i;
-  
-!       for (i = 0; i < count; i++)
-  	if (entries[i].addr == addr)
-  	  {
-  	    entries[i].addr = NULL;
-  	    free++;
-  	    return;
-  	  }
-+       assert(i < count);
-      }
-  
-!   int  count;
-!   RootArea*   entries;
-  
-   private:
-!   int  max;
-!   int  free;
-  };
-  
-  static RootAreas	roots;	// areas registered as containing roots
+    pageSpace = new_pageSpace;
+    pageLink = new_pageLink;
 ***************
-*** 372,384 ****
-  void
-  registerRootArea(void * addr, int bytes)
-  {
-!   roots.insert(addr, bytes);
-  }
+*** 1730,1741 ****
+  // FromSpace (usedPages - stablePages).
+  // We guess that FromSpace will be reduced to less than 50%:
+  #define USED2FREE_RATIO 2
+! #define enoughPagesLeft(pages) \
+! (usedPages + pages \
+!  <= USED2FREE_RATIO * (freePages + reservedPages - usedPages - pages))
   
-  void
-  unregisterRootArea(void* addr)
+! GCP
+! DefaultHeap::alloc(Word size)
   {
-!   roots.erase(addr);
+    GCP  object;		/* Pointer to the object */
+  
+--- 1722,1732 ----
+  // FromSpace (usedPages - stablePages).
+  // We guess that FromSpace will be reduced to less than 50%:
+  #define USED2FREE_RATIO 2
+! #define enoughPagesLeft(pages)     (usedPages + pages \
+! 				    <= USED2FREE_RATIO * (freePages + reservedPages - usedPages - pages))
+  
+!      GCP
+!      DefaultHeap::alloc(Word size)
+  {
+    GCP  object;		/* Pointer to the object */
+  
+***************
+*** 1831,1853 ****
   }
   
   /*---------------------------------------------------------------------------*
---- 356,368 ----
-  void
-  registerRootArea(void * addr, int bytes)
-  {
-!   roots.add(addr, bytes);
-  }
-  
-  void
-  unregisterRootArea(void* addr)
-  {
-!   roots.remove(addr);
-  }
-  
-  /*---------------------------------------------------------------------------*
-***************
-*** 1238,1248 ****
-      CmmExamineStaticAreas(CmmExamineStaticArea);
-  
-      /* Examine registered roots:		*/
-!     roots.begin();
-!     while (RootArea* ra = roots.get())
-        {
-! 	fp = ra->addr;
-! 	for (int j = ra->bytes; j > 0; j = j - bytesPerWord)
-  	  promotePage((GCP)*fp++);
-        }
-  
---- 1222,1231 ----
-      CmmExamineStaticAreas(CmmExamineStaticArea);
-  
-      /* Examine registered roots:		*/
-!     for (int i = 0; i < roots.count; i++)
-        {
-! 	fp = roots.entries[i].addr;
-! 	for (int j = roots.entries[i].bytes; j > 0; j = j - bytesPerWord)
-  	  promotePage((GCP)*fp++);
-        }
-  
-diff -c /home/omega/attardi/posso/cmm/cmm.h /project/posso/cmm/curr/cmm/cmm.h
-*** /home/omega/attardi/posso/cmm/cmm.h	Fri Mar 28 18:25:29 1997
---- /project/posso/cmm/curr/cmm/cmm.h	Wed Feb 26 12:09:06 1997
-***************
-*** 363,378 ****
-  #define VirtualBase(A) &(P ## A)
-  #endif
-  
-- /*---------------------------------------------------------------------------*
+-  * -- DefaultHeap::allocAtomic
 -  *
--  * Additional roots may be registered with the garbage collector by calling
--  * the procedure gcRoots with a pointer to the area and the size of the area.
+-  * Results: returns an area which is collected but not traversed since it
+-  * is declared not to contain pointers.
 -  *
 -  *---------------------------------------------------------------------------*/
 - 
-- extern void  registerRootArea(void *area, int bytes);
-- extern void  unregisterRootArea(void *addr);
+- GCP
+- DefaultHeap::allocAtomic(Word size)
+- {
 - 
-  /* Verbosity levels:							*/
-  const	CMM_STATS    =   1;	/* Log garbage collector info		*/
-  const	CMM_ROOTLOG  =   2;	/* Log roots found in registers, stack
---- 363,368 ----
+-   Ptr area = (Ptr) new (size, this) CmmVarObject;
+-   area += sizeof(CmmVarObject);
+-   return (GCP)area;
+- }
+- 
+- /*---------------------------------------------------------------------------*
+   * -- isTraced
+   *
+   * Results: true if the object is checked by the garbage collector.
+--- 1822,1827 ----
 ***************
-*** 877,931 ****
-   public:
-    Set()
+*** 1860,1873 ****
+    extern int end;
+    if (
+  #     ifdef _WIN32
+!       printf("in text?\n")
+  #     else
+!       obj >= (void *)(&end)
+  #     endif
+  #     ifdef STACK_GROWS_DOWNWARD
+!       && obj < (void *)(&obj)
+  #     else
+!       && obj > (void *)(&obj)
+  #     endif
+        )
       {
-        max = 0;
-        free = 0;
-        iter = 0;
--       entries = NULL;
-      }
-  
-    void insert(T* entry)
+--- 1834,1847 ----
+    extern int end;
+    if (
+  #     ifdef _WIN32
+!       printf("in text?\n") &&
+  #     else
+!       obj >= (void *)(&end) &&
+  #     endif
+  #     ifdef STACK_GROWS_DOWNWARD
+!       obj < (void *)(&obj)
+  #     else
+!       obj > (void *)(&obj)
+  #     endif
+        )
       {
-  #     define	    setIncrement 10
--       int i;
-  
-        if (free)
-  	{
-! 	  for (i = 0; i < max; i++)
-  	    if (entries[i] == NULL)
-! 	      break;
-  	}
-!       else
-  	{
-  	  T** np;
-! 	  int count = max;
-  	  max += setIncrement;
-! 	  free = setIncrement;
-! 	  np = ::new T*[max];
-! 	  for (i = 0; i < count; i++)
-  	    np[i] = entries[i];
-  	  // clear the rest
-  	  for (; i < max; i++)
-! 	    np[i] = NULL;
-! 	  if (entries) ::delete  entries;
-! 	  entries = np;
-! 	  i = count;
-  	}
-!       entries[i] = entry;
-!       free--;
-      }
-  
-    void erase(T* entry)
-      {
-        int i;
-  
-!       for (i = 0; i < max; i++)
-  	if (entries[i] == entry)
-  	  {
-  	    entries[i] = NULL;
-  	    free++;
-  	    return;
-  	  }
-!       assert(i < count);
-      }
-  
-    T* get()
---- 867,921 ----
-   public:
-    Set()
-      {
-+       last = 0;
-        max = 0;
-        free = 0;
-        iter = 0;
-      }
-  
-    void insert(T* entry)
-      {
-  #     define	    setIncrement 10
-  
-        if (free)
-  	{
-! 	  for (int i = 0; i < last; i++)
-  	    if (entries[i] == NULL)
-! 	      {
-! 		entries[i] = entry;
-! 		free--;
-! 		return;
-! 	      }
-  	}
-!       if (last == max)
-  	{
-  	  T** np;
-! 	  int i;
-  	  max += setIncrement;
-! 	  np = new T*[max];
-! 	  for (i = 0; i < last; i++)
-  	    np[i] = entries[i];
-+ 	  delete  entries;
-+ 	  entries = np;
-  	  // clear the rest
-  	  for (; i < max; i++)
-! 	    entries[i] = NULL;
-  	}
-!       entries[last++] = entry;
-      }
-  
-    void erase(T* entry)
-      {
-        int i;
-  
-!       for (i = 0; i < last; i++)
-  	if (entries[i] == entry)
-  	  {
-  	    entries[i] = NULL;
-  	    free++;
-  	    return;
-  	  }
-!       assert(i < last);
-      }
-  
-    T* get()
+diff -c /home/omega/attardi/posso/cmm/cmm.h /project/posso/cmm/curr/cmm/cmm.h
+*** /home/omega/attardi/posso/cmm/cmm.h	Tue Mar  3 15:02:40 1998
+--- /project/posso/cmm/curr/cmm/cmm.h	Fri Nov  7 10:10:10 1997
 ***************
-*** 944,953 ****
+*** 311,323 ****
+   *---------------------------------------------------------------------------*/
   
-    void begin() { iter = 0;}
+  #ifdef CMM_VERBOSE
+!   #define WHEN_VERBOSE(flag, code)	if (Cmm::verbose & flag) {code;}
+  #else
+    #define WHEN_VERBOSE(flag, code)
+  #endif
   
-!  protected:
-    T**  entries;
-    
-!  private:
-    int  max;
-    int  free;
-    int  iter;
---- 934,943 ----
+  #ifdef CMM_FEATURES
+!   #define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) {code;}
+  #else
+    #define WHEN_FLAGS(flag, code)
+  #endif
+--- 311,323 ----
+   *---------------------------------------------------------------------------*/
   
-    void begin() { iter = 0;}
+  #ifdef CMM_VERBOSE
+!   #define WHEN_VERBOSE(flag, code)	if (Cmm::verbose & flag) code
+  #else
+    #define WHEN_VERBOSE(flag, code)
+  #endif
   
-!   int  last;
-    T**  entries;
-    
-! private:
-    int  max;
-    int  free;
-    int  iter;
+  #ifdef CMM_FEATURES
+!   #define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) code
+  #else
+    #define WHEN_FLAGS(flag, code)
+  #endif
+***************
+*** 513,519 ****
+  
+  #define OUTSIDE_HEAPS(page) \
+  	(page < firstHeapPage || page > lastHeapPage || \
+! 	 (Word)pageHeap[page] <= (Word)UNCOLLECTEDHEAP)
+  
+  #define HEAPPERCENT(x) (((x)*100)/(Cmm::theDefaultHeap->reservedPages \
+  			+ freePages))
+--- 513,519 ----
+  
+  #define OUTSIDE_HEAPS(page) \
+  	(page < firstHeapPage || page > lastHeapPage || \
+! 	 pageHeap[page] == UNCOLLECTEDHEAP)
+  
+  #define HEAPPERCENT(x) (((x)*100)/(Cmm::theDefaultHeap->reservedPages \
+  			+ freePages))
+***************
+*** 606,613 ****
+  
+    virtual void scavenge(CmmObject **) {};
+  
+-   inline GCP allocAtomic(Word size) { return alloc(size); };
+- 
+    inline bool inside(GCP ptr)
+      {
+        Page page = GCPtoPage(ptr); // Page number
+--- 606,611 ----
+***************
+*** 662,668 ****
+  
+    DefaultHeap();
+    GCP alloc(Word);
+-   GCP allocAtomic(Word);
+    void reclaim(GCP) {}		// Bartlett's delete does nothing.
+    void collect();		// the default garbarge collector
+    void scavenge(CmmObject **);
+--- 660,665 ----
+***************
+*** 697,703 ****
+  
+    MarkAndSweep();
+    inline GCP 	alloc(Word size){ return (GCP) mswAlloc(size); }
+-   inline GCP	allocAtomic(Word size) { return (GCP) mswAllocOpaque(size); }
+    inline void	reclaim(GCP p)	{ mswFree(p); }
+    inline void	collect()	{ mswCollect(); }
+    inline void*	realloc(void * p, Word size)	{ return mswRealloc(p, size); }
+--- 694,699 ----
 Common subdirectories: /home/omega/attardi/posso/cmm/doc and /project/posso/cmm/curr/cmm/doc
+diff -c /home/omega/attardi/posso/cmm/msw.cpp /project/posso/cmm/curr/cmm/msw.cpp
+*** /home/omega/attardi/posso/cmm/msw.cpp	Mon Mar  2 10:10:36 1998
+--- /project/posso/cmm/curr/cmm/msw.cpp	Fri Nov  7 17:26:13 1997
+***************
+*** 519,525 ****
+--- 519,527 ----
+  #	endif
+  
+  	assert(size);
++ 
+  	size = ROUND_UP(size, PtrSize);
++ 
+  	mswGetStatsDEBUG(size);
+  
+  	if (size >= MaxFixedSize)
+***************
+*** 533,538 ****
+--- 535,541 ----
+  	assert(freePage->objSize == size);
+  
+  	freeList = freePage->freeList;
++ 
+  	freePage->allocatedObjs += 1;
+  	*freeList = AllocMask;
+  	*(freeList-1) = TransparentMask;

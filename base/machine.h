@@ -47,40 +47,40 @@ typedef unsigned char 	Byte;
 typedef unsigned long	Word;
 typedef char *		Ptr;
 typedef Ptr *		GCP;	/* Pointer to a garbage collected object */
-typedef unsigned	page;	/* Page number */
+typedef unsigned	Page;	/* Page number */
 
 /*---------------------------------------------------------------------------*
  * -- Compatibility
  *---------------------------------------------------------------------------*/
 
 #ifdef __cplusplus
-#    define C_LANG          "C"
+# define C_LANG          "C"
 #else
-#    define C_LANG          
+# define C_LANG          
 #endif
 
 #if defined(__sun__) && !defined(__svr4__)
-extern C_LANG void	bzero(void *, int);
+  extern C_LANG void	bzero(void *, int);
 #else
-#include <string.h>
-#define bzero(s, n)	memset(s, 0, n)
+# include <string.h>
+# define bzero(s, n)	memset(s, 0, n)
 #endif
 
 #ifndef MIN
-#define MIN(a,b) (((a)<(b))?(a):(b))
+# define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
 
 #ifndef MAX
-#define MAX(a,b) (((a)>(b))?(a):(b))
+# define MAX(a,b) (((a)>(b))?(a):(b))
 #endif
 
 #if defined(__svr4__) || defined(_WIN32)
-#   define _setjmp(x)  setjmp(x)
-#   define _longjmp(x,y) longjmp(x,y)
+# define _setjmp(x)  setjmp(x)
+# define _longjmp(x,y) longjmp(x,y)
 #endif
 
 #if !defined(__BORLANDC__) && !defined(_WIN32)
-extern C_LANG void* sbrk(int);
+# include <unistd.h>	// extern C_LANG void* sbrk(int);
 #endif
 
 /*---------------------------------------------------------------------------*
@@ -90,7 +90,7 @@ extern C_LANG void* sbrk(int);
  *---------------------------------------------------------------------------*/
 
 #ifndef hp9000s800
-#define STACK_GROWS_DOWNWARD
+# define STACK_GROWS_DOWNWARD
 #endif
 
 /*---------------------------------------------------------------------------*
@@ -100,16 +100,23 @@ extern C_LANG void* sbrk(int);
  *---------------------------------------------------------------------------*/
 
 #if defined(__mips) || defined(__sparc) || defined(__alpha)
-#    define OBJ_ALIGNMENT			8
-
-#    ifndef MISALIGN
-#        define	DOUBLE_ALIGN
-#    endif
+# define OBJ_ALIGNMENT	8
 #else
-#    define OBJ_ALIGNMENT			4
+# define OBJ_ALIGNMENT	4
+#endif
+
+/*
+ * DOUBLE_ALIGN = (OBJ_ALIGNMENT != sizeof(Word))
+ */
+#if defined(__mips) || defined(__sparc)
+# define DOUBLE_ALIGN
 #endif
 
 #define MEMALIGN	(char *)memalign
+
+#if defined(__sparc)
+# define ARRAY_PADDING
+#endif
 
 /*---------------------------------------------------------------------------*
  *
@@ -133,12 +140,13 @@ extern void *	globalHeapStart; // start of global heap
 #   define DATASTART USRDATA
 #elif defined(__svr4__) || defined(DGUX)
     extern int etext;
-#   define DATASTART SVR4DataStart(0x10000)
+    extern char * CmmSVR4DataStart(int);
+#   define DATASTART CmmSVR4DataStart(0x10000)
 #elif defined(hp9000s300)
     extern int etext;
 #   define DATASTART ((((unsigned long)(&etext)) + 0xfff) & ~0xfff)
 
-#elif defined (_WIN32)
+#elif defined(_WIN32)
 #   define STACKBOTTOM CmmGetStackBase()
 
 #elif defined(__i386)
@@ -166,10 +174,10 @@ extern void *	globalHeapStart; // start of global heap
 #   define DATASTART ((unsigned long) get_etext())
 #   define STACKBOTTOM ((unsigned long) 0x4000000)
 #elif defined(ns32000)
-  extern char **environ;
+    extern char **environ;
 #   define DATASTART (&environ)
 #elif defined(__sparc)
-	/* This assumes ZMAGIC, i.e. demand-loadable executables.	*/
+      /* This assumes ZMAGIC, i.e. demand-loadable executables.	*/
 #   define DATASTART (*(int *)0x2004+0x2000)
 #elif defined(sun3)
     extern char etext;
@@ -178,24 +186,19 @@ extern void *	globalHeapStart; // start of global heap
 #   define DATASTART ((((unsigned long)(&etext)) + 0x3fffff) & ~0x3fffff) \
 		      + ((unsigned long)&etext & 0xfff)
 #elif defined(_AUX_SOURCE)
-	/* This only works for shared-text binaries with magic number 0413.
-	   The other sorts of SysV binaries put the data at the end of the text,
-	   in which case the default of &etext would work.  Unfortunately,
-	   handling both would require having the magic-number available.
-	   	   		-- Parag
-	   */
+      /* This only works for shared-text binaries with magic number 0413.
+	 The other sorts of SysV binaries put the data at the end of the text,
+	 in which case the default of &etext would work.  Unfortunately,
+	 handling both would require having the magic-number available.
+	 -- Parag
+	 */
 #   define DATASTART ((((unsigned long)(&etext)) + 0x3fffff) & ~0x3fffff) \
 		      + ((unsigned long)&etext & 0x1fff)
 #else
-/* The default case works only for contiguous text and data, such as   */
-/* on a Vax.                                                           */
+    /* The default case works only for contiguous text and data, such as
+     * on a Vax.                                                           */
     extern char etext;
 #   define DATASTART (&etext)
 #endif
-
-#define SVR4DataStart(max_page_size) \
-   ((unsigned long)(&etext) % max_page_size ? \
-    (unsigned long)(&etext) + max_page_size : \
-    (unsigned long)&etext)
 
 #endif /* ! _MACHINE_H */

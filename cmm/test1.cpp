@@ -1,9 +1,8 @@
-/* Test program for the MSW Heap */
+/* Test program for CMM */
 
 /* Externals */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include "cmm.h"
 
 #define	VECT_SIZE	1000
@@ -14,18 +13,25 @@ struct  cell : public CmmObject
   cell  *cdr;
   int  value;
   cell(cell *initcar, cell *initcdr, int initvalue);
-  void traverse();
+#ifdef FIELDTABLE
+  CmmFieldTable& getFieldTable()
+    {
+      static CmmFieldPtr fields[] = { CmmFieldPtr(&cell::car),
+				      CmmFieldPtr(&cell::cdr) };
+      static CmmFieldTable table = { 2, fields };
+      return table;
+    }
+#else
+  void traverse()
+    {
+      CmmHeap *heap = Cmm::heap;
+      heap->scavenge((CmmObject **)&car);
+      heap->scavenge((CmmObject **)&cdr);
+    }
+#endif
 };
 
 typedef  cell* CP;
-
-void cell::traverse()  
-{
-  CmmHeap *heap = Cmm::heap;
-  heap->scavenge((CmmObject **)&car);
-  heap->scavenge((CmmObject **)&cdr);
-}
-
 
 cell::cell(cell *initcar, cell *initcdr, int initvalue)
 {
@@ -42,9 +48,17 @@ struct vector : public CmmObject
   char bytes[VECT_SIZE];
   int  value2;
   vector(vector* x, vector* y, int v1, int v2);
+  void traverse();
 };
 
 typedef  vector* VP;
+
+void vector::traverse()
+{
+  CmmHeap *heap = Cmm::heap;
+  heap->scavenge((CmmObject **)&car);
+  heap->scavenge((CmmObject **)&cdr);
+}
 
 vector::vector(vector* x, vector* y, int v1, int v2)  
 {
@@ -124,9 +138,6 @@ vectortest()
       zp = lp;
       for (j = i; j >= 0 ; j--)
 	{
-	  // mswCheckAllocatedObj(zp);
-	  // if (zp->cdr) mswCheckAllocatedObj(zp->cdr);
-	  
 	  if ((zp == NULL) || (zp->value1 != j)  ||  (zp->value2 != j))
 	    printf("LP is not a good list when j = %d\n", j);
 	  zp = zp->cdr;
@@ -149,10 +160,8 @@ treetest()
       tp = zp;
     }
   Cmm::heap->collect();
-  mswCheckHeap(1);
   zp = new cell(tp, tp, 6);
   Cmm::heap->collect();
-  mswCheckHeap(1);
   printtree(zp);
   return(zp);
 }
@@ -160,7 +169,7 @@ treetest()
 void
 listtest2()
 {
-  int  i, j, length = 10000, repeat = 1000;
+  int  i, j, length = 10000, repeat = 100;
   CP  lp, zp;
 
   printf("List Test 2\n");
@@ -168,8 +177,6 @@ listtest2()
     {
       if  (i % 50 == 0)
 	{ printf("."); fflush(stdout); }
-      /* Cmm::heap->collect(); */
-      mswCheckHeap(0);
       /* Build the list */
       lp = NULL;
       for  (j = 0; j < length; j++)  
@@ -181,9 +188,6 @@ listtest2()
       zp = lp;
       for (j = length-1; j >= 0 ; j--)  
 	{
-	  // mswCheckAllocatedObj(zp);
-	  // if (zp->cdr) mswCheckAllocatedObj(zp->cdr);
-	  
 	  if ((zp == NULL) || (zp->value != j))
 	    printf("LP is not a good list when j = %d\n", j);
 	  zp = zp->cdr;
@@ -197,27 +201,18 @@ CP  gp;		/* A global pointer */
 void
 main()
 {
-  Cmm::heap = Cmm::theMSHeap;
   /* List construction test */
-  /* printf("WARNING: skipping listtest1()!\n"); */
   listtest1();
-  mswCheckHeap(1);
 
   /* List of vectors > 1 page */
   vectortest();
-  mswCheckHeap(1);
 
   /* Tree construction test */
   gp = treetest();
-  mswCheckHeap(1);
 
   /* 1000 10000 node lists */
   listtest2();
-  mswCheckHeap(1);
 
   /* Check that tree is still there */
   printtree(gp);
-
-  mswCheckHeap(1);
-  mswShowInfo();
 }

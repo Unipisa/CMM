@@ -9,7 +9,7 @@
 
 /* Cell type to build a list with. */
 
-struct  cell : CmmObject  {
+struct  cell : CmmObject {
   cell *next;
   int  *value1;
   int  value2;
@@ -32,23 +32,20 @@ typedef  cell* cellptr;
 
 #define TOT	5000
 
-struct  cella  {
-  cellptr ptr[TOT];
-};
-
 Cmm dummy(CMM_MINHEAP, CMM_MAXHEAP, CMM_INCHEAP, CMM_GENERATIONAL,
 	  CMM_INCPERCENT, CMM_GCTHRESHOLD, CMM_HEAPROOTS | CMM_STATS, 0);
 
+void
 main()
 {
-	cella*  pointers = new cella; // allocated in uncollected heap
+	cellptr  *pointers = ::new cellptr[TOT]; // allocated in uncollected heap
 	cellptr cl = NULL, cp;
 	int i;
 
 	/* Allocate TOT cells referenced from array pointers */
 	for  (i = 0; i < TOT; i++)  {
 	   cp = new cell;
-	   pointers->ptr[i] = cp;
+	   pointers[i] = cp;
 	   cp->value1 = 0;
 	   cp->value2 = i;
 	}
@@ -67,18 +64,17 @@ main()
 
 	/* Verify that cells referenced from pointers still exist */
 	for  (i = 0; i < TOT; i++)
-	  if (pointers->ptr[i]->value2 != i) {
+	  if (pointers[i]->value2 != i) {
 	    fprintf(stderr, "cell %d not valid\n", i);
 	    abort();
 	  }
 
 	/* Verify that cell list is still correct */
 	for  (i = 0; i < TOT; i++)  {
-	  if  (cl->value2 != *cl->value1) {
+	  if  (cl->value1 != &cl->value2) {
 	    fprintf(stderr, "cell list damaged\n");
 	    abort();
 	  }
 	  cl = cl->next;
 	}
-	return 0;
 }

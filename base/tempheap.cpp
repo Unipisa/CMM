@@ -66,8 +66,7 @@ Container::reset()
   bzero((char*)&objectMap[WORD_INDEX(body)],
 	((usedWords() + bitsPerWord - 1) / bitsPerWord) * bytesPerWord);
 #if !HEADER_SIZE || defined(MARKING)
-  bzero((char*)&liveMap[WORD_INDEX(body)],
-	((usedWords() + bitsPerWord - 1) / bitsPerWord) * bytesPerWord);
+  resetliveMap();
 #endif
   top = BOTTOM;
 }
@@ -145,138 +144,20 @@ Container::copy(CmmObject *ptr)
 
 RootSet::RootSet()
 {
-  entryInc = 10;
-  entryNum = 10;
-  current = 0;
-  entrypNum = 10;
-  currentp = 0;
-
-  // Default to not-conservative
+  // Default to non conservative
   isConservative = false;
-
-  entry = new CmmObject*[entryNum];
-  entryp = new CmmObject**[entrypNum];
-
-  int i;
-  for (i = 0; i < entryNum; i++)
-    entry[i] = NULL;
-  for (i = 0; i < entrypNum; i++)
-    entryp[i] = NULL;
-
-}
-
-void 
-RootSet::set(CmmObject *obj)
-     // trivial implementation, but this is not a critical operation
-{
-  int i;
-  for (i = 0; i < entryNum; i++)
-    if (entry[i] == NULL)
-      {
-	entry[i] = obj;
-	return;
-      }
-  CmmObject **tmp = new CmmObject*[entryNum + entryInc];
-
-  for (i = 0; i < entryNum; i++)
-    tmp[i] = entry[i];
-  delete entry;
-  entry = tmp;
-  entry[i++] = obj;
-  entryNum += entryInc;
-  // put the rest to NULL.
-  for (; i < entryNum; i++)
-    entry[i] = NULL;
-}
-
-void 
-RootSet::unset(CmmObject *obj)
-{
-  int i;
-  for (i = 0; ((i < entryNum) && (entry[i] != obj)); i++);
-  assert (entry[i] == obj);
-  entry[i] = NULL;
-}
-
-CmmObject *
-RootSet::get()
-{
-  // look for a not empty entry
-  while (current < entryNum)
-    {
-      if (entry[current])
-	return entry[current++];
-      else
-	current++;
-    }
-  // No more entries;
-  return (CmmObject *)NULL;
-}
-
-void
-RootSet::setp(CmmObject **obj)
-     // trivial implementation, but this is not a critical operation
-{
-  int i;
-  for (i = 0; i < entrypNum; i++)
-    if (entryp[i] == NULL)
-      {
-	entryp[i] = obj;
-	return;
-      }
-  CmmObject ***tmp = new CmmObject**[entrypNum + entryInc];
-
-  for (i = 0; i < entrypNum; i++)
-    tmp[i] = entryp[i];
-  delete entryp;
-  entryp = tmp;
-  entryp[i++] = obj;
-  entrypNum += entryInc;
-  // put the rest to NULL.
-  for (; i < entrypNum; i++)
-    entryp[i] = NULL;
-}
-
-void
-RootSet::unsetp(CmmObject **obj)
-{
-  int i;
-  for (i = 0; ((i < entrypNum) && (entryp[i] != obj)); i++);
-  assert (entryp[i] == obj);
-  entryp[i] = NULL;
-}
-
-CmmObject **
-RootSet::getp()
-{
-  // look for a not empty entry
-  while (currentp < entrypNum)
-    {
-      if (entryp[currentp])
-	return entryp[currentp++];
-      else
-	currentp++;
-    }
-  // No more entries;
-  return (CmmObject **)NULL;
-}
-
-void
-RootSet::reset()
-{
-  current = 0;
-  currentp = 0;
 }
 
 void
 RootSet::scan(CmmHeap *heap)
 {
-  reset();
-  CmmObject *objPtr, **objPtrPtr;
+  CmmObject *objPtr, **objPtrLoc;
   CmmHeap *oldHeap = Cmm::heap;
   Cmm::heap = heap;
-  while (objPtr = get()) objPtr->traverse();
-  while (objPtrPtr = getp()) heap->scavenge(objPtrPtr);
+  roots.begin();
+  while (objPtr = roots.get()) objPtr->traverse();
+  rootsLoc.begin();
+  while (objPtrLoc = rootsLoc.get()) heap->scavenge(objPtrLoc);
   Cmm::heap = oldHeap;
 }
 
@@ -327,12 +208,12 @@ TempHeap::copy(CmmObject *ptr)
 void
 TempHeap::scavenge(CmmObject **ptr)
 {
-  GCP pp = (GCP)*ptr;
+  Word pp = (GCP)*ptr;
   if (OUTSIDE_HEAPS(GCPtoPage(pp)))
     return;
 
   CmmObject *oldPtr = basePointer(pp);
-  int offset = (int)pp - (int)oldPtr;
+  int offset = (Word)pp - (Word)oldPtr;
 
   if (!inside(oldPtr))
     {
@@ -353,12 +234,12 @@ TempHeap::scavenge(CmmObject **ptr)
 #   else
       (MARKED(oldPtr))
 #   endif
-	*ptr = (CmmObject *)((int)oldPtr->getForward() + offset);
+	*ptr = (CmmObject *)((Word)oldPtr->getForward() + offset);
   else
     {
       CmmObject *newObj = copy(oldPtr);
       oldPtr->setForward(newObj);
-      *ptr = (CmmObject *)((int)newObj + offset);
+      *ptr = (CmmObject *)((Word)newObj + offset);
     }
 }
 

@@ -1,57 +1,39 @@
+
+/*
+ * Test for CmmArray
+ */
+
 #include "cmm.h"
-
-
 #include <stdio.h>
 #include <stdlib.h>
-#include "tempheap.h"
 
-struct  cell : CmmObject 
+int count = 0;
+
+class Item : public CmmObject
 {
-  cell  *car;
-  cell  *cdr;
-  int  value;
-  cell(cell *initcar, cell *initcdr, int initvalue);
-  void traverse();
-};
-
-typedef  cell* CP;
-
-void cell::traverse()  
-{
-  CmmHeap *heap = Cmm::heap;
-  heap->scavenge((CmmObject **)&car);
-  heap->scavenge((CmmObject **)&cdr);
-}
-
-
-cell::cell(cell *initcar, cell *initcdr, int initvalue)
-{
-  car = initcar;
-  cdr = initcdr;
-  value = initvalue;
-}
-
-struct vector : CmmObject 
-{
-  vector  *car;
-  vector  *cdr;
+public:
+  Item  *car;
+  Item  *cdr;
   int  value1;
-  char bytes[1000];
+  char bytes[bytesPerPage+2];
   int  value2;
-  vector(vector* x, vector* y, int v1, int v2);
+  Item() { value1 = ++count; };
+  Item(Item* x, Item* y, int v1, int v2);
   void traverse();
+  void *operator new[](size_t size);
 };
 
-typedef  vector* VP;
+typedef  Item* VP;
 
-void vector::traverse()
+void
+Item::traverse()
 {
   CmmHeap *heap = Cmm::heap;
   heap->scavenge((CmmObject **)&car);
   heap->scavenge((CmmObject **)&cdr);
 }
 
-vector::vector(vector* x, vector* y, int v1, int v2)  
+Item::Item(Item* x, Item* y, int v1, int v2)
 {
   car = x;
   cdr = y;
@@ -59,13 +41,19 @@ vector::vector(vector* x, vector* y, int v1, int v2)
   value2 = v2;
 }
 
+void*
+Item::operator new[](size_t size)
+{
+  return sizeof(size_t) + (char*)new(size) CmmArray<Item>;
+}
 
-void  vectortest()
+void
+main()
 {
   int  i, j;
   VP  lp, zp;
   
-  printf("Vector test\n");
+  printf("Item test\n");
   lp = NULL;
   for (i = 0; i <= 100 ; i++)  
     {
@@ -73,25 +61,17 @@ void  vectortest()
 	printf("%d ", i);
       else
 	printf("%d\n", i);
-      zp = new vector[10](NULL, lp, i, i);
+      zp = new Item[8];
+      zp[0] = Item(NULL, lp, i, i);
       lp = zp;
       Cmm::heap->collect();
       zp = lp;
       for (j = i; j >= 0 ; j--)  
 	{
-	  if ((zp == NULL) || (zp->value1 != j)  ||  (zp->value2 != j))
+	  if ((zp == NULL) || (zp[0].value1 != j)  ||  (zp[0].value2 != j))
 	    printf("LP is not a good list when j = %d\n", j);
 	  zp = zp->cdr;
 	}
     }
   printf("\n");		   
-}
-
-void
-main()
-{
-  /* List of vectors > 1 page */
-  vectortest();
-
-  exit(0);
 }

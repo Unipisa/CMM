@@ -53,6 +53,8 @@ CMM has been tested on:
  - AIX (RS6000)
  - SGI
  - Win32 (Windows 95, Windows NT)
+ - Digital OS (Alpha)
+ - MacOS (Metrowerks C++)
 
 but it should run without changes also on HPUX, NeXTOS and DOS (djgpp).
 If you are interest in some other platforms you can send mail to
@@ -264,6 +266,13 @@ The following people have contributed to this work:
 Giuseppe Attardi, attardi@di.unipi.it
 Tito Flagella,	tito@di.unipi.it
 Pietro Iglio, iglio@di.unipi.it
+
+Patrick C. Beard <beard@apple.com> contributed the MacIntosh port.
+Hans J. Boehm <boehm@mti.sgi.com> provided useful suggestion and some machine
+specific code from his collector.
+Christian Heckler <chh@plato.uni-paderborn.de> contributed the parallel version
+for Solaris threads as well as various bug fixes.
+Uttam M. Narsu <narsu@styx.hks.com> contributed the SGI port.
 
 Carlo Traverso and John Abbott contributed useful hints.
 Joachim Hollman gave precious feedback on the first implementation of CMM.

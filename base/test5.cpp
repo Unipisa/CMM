@@ -1,10 +1,12 @@
-/* Test program for the gcalloc.c */
+/* Test program for CMM */
 
 /* Externals */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "tempheap.h"
+#include "cmm.h"
+
+#define	VECT_SIZE	1000
 
 struct  cell : CmmObject 
 {
@@ -37,7 +39,7 @@ struct vector : CmmObject
   vector  *car;
   vector  *cdr;
   int  value1;
-  char bytes[1000];
+  char bytes[VECT_SIZE];
   int  value2;
   vector(vector* x, vector* y, int v1, int v2);
   void traverse();
@@ -63,9 +65,10 @@ vector::vector(vector* x, vector* y, int v1, int v2)
 /* Test program */
 
 int  init_global = 2,
-array_global[1000];
+array_global[VECT_SIZE];
 
-void  printtree(CP zp)
+void
+printtree(CP zp)
 {
   CP  tp;
 
@@ -85,19 +88,18 @@ void  printtree(CP zp)
   printf("\n");
 }
 
-void  listtest1()
+void
+listtest1()
 {
   int  i, j;
   CP  lp, zp;
   
   printf("List test 1\n");
   lp = NULL;
-  for (i = 0; i <= 1000 ; i++)  
+  for (i = 0; i <= VECT_SIZE ; i++)  
     {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else
-	printf("%d\n", i);
+      if  (i % 50 == 0)
+	{ printf("."); fflush(stdout); }
       zp = new cell(NULL, lp, i);
       lp = zp;
       Cmm::heap->collect();
@@ -112,7 +114,8 @@ void  listtest1()
   printf("\n");		   
 }
 
-void  vectortest()
+void
+vectortest()
 {
   int  i, j;
   VP  lp, zp;
@@ -121,15 +124,13 @@ void  vectortest()
   lp = NULL;
   for (i = 0; i <= 100 ; i++)  
     {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else
-	printf("%d\n", i);
+      if  (i % 10 == 0)
+	{ printf("."); fflush(stdout); }
       zp = new vector(NULL, lp, i, i);
       lp = zp;
       Cmm::heap->collect();
       zp = lp;
-      for (j = i; j >= 0 ; j--)  
+      for (j = i; j >= 0 ; j--)
 	{
 	  if ((zp == NULL) || (zp->value1 != j)  ||  (zp->value2 != j))
 	    printf("LP is not a good list when j = %d\n", j);
@@ -139,7 +140,8 @@ void  vectortest()
   printf("\n");		   
 }
 
-CP  treetest()
+CP
+treetest()
 {
   int  i;
   CP  tp, zp;
@@ -158,7 +160,8 @@ CP  treetest()
   return(zp);
 }
 
-void  listtest2()
+void
+listtest2()
 {
   int  i, j, length = 10000, repeat = 1000;
   CP  lp, zp;
@@ -166,10 +169,8 @@ void  listtest2()
   printf("List Test 2\n");
   for (i = 0; i < repeat; i++)  
     {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else
-	printf("%d\n", i);
+      if  (i % 50 == 0)
+	{ printf("."); fflush(stdout); }
       /* Build the list */
       lp = NULL;
       for  (j = 0; j < length; j++)  
@@ -191,11 +192,9 @@ void  listtest2()
 
 CP  gp;		/* A global pointer */
 
-
 void
 main()
 {
-//  Cmm::heap = new TempHeap(10000);
   /* List construction test */
   listtest1();
 
@@ -210,6 +209,4 @@ main()
 
   /* Check that tree is still there */
   printtree(gp);
-
-  exit(0);
 }

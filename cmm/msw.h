@@ -44,13 +44,13 @@
 extern "C" {
 #endif
 
-extern void *		mswAlloc		(unsigned long size);
-extern void * 		mswAllocOpaque		(unsigned long size);
+extern void *		mswAlloc		(size_t size);
+extern void * 		mswAllocOpaque		(size_t size);
 extern void		mswFree			(void * p);
 
-unsigned long		mswGetObjSize		(void * ptr);
-extern void *		mswRealloc		(void *, unsigned long);
-extern void *		mswCalloc		(unsigned long, unsigned long);
+size_t			mswGetObjSize		(void * ptr);
+extern void *		mswRealloc		(void *, size_t);
+extern void *		mswCalloc		(size_t, size_t);
 
 extern void		mswCollect		(void);
 extern void		mswCollectNow		(void);

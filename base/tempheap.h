@@ -88,6 +88,7 @@ class Container {
   int top;			// index to the first free word
 };
 
+
 /*---------------------------------------------------------------------------*
  *
  * -- RootSet
@@ -98,30 +99,26 @@ class RootSet
 {
 private:
   bool isConservative;
-  void scanSystemRoots() {};	// Still to define
+  void scanSystemRoots() {}; // Still to define
 
 public:
-  void set(CmmObject *);
-  void unset(CmmObject *);
-  CmmObject *get();
-  void setp(CmmObject **);
-  void unsetp(CmmObject **);
-  CmmObject **getp();
-  void reset();
-
+  RootSet();
+  void insert(CmmObject* p) { roots.insert(p); }
+  void insert(CmmObject** p){ rootsLoc.insert(p); }
+  void erase(CmmObject* p)  { roots.erase(p); }
+  void erase(CmmObject** p) { rootsLoc.erase(p); }
   void scan(CmmHeap *);
   
-  RootSet();
-
+  // back compatibility
+  void set(CmmObject* p)    { roots.insert(p); }
+  void setp(CmmObject** p)  { rootsLoc.insert(p); }
+  void unset(CmmObject* p)  { roots.erase(p); }
+  void unsetp(CmmObject** p){ rootsLoc.erase(p); }
+  
 private:
-  int entryInc;			// = 10;
-  int entryNum;			// = 10;
-  int current;			// = 0;
-  int entrypNum;		// = 10;
-  int currentp;			// = 0;
-
-  CmmObject **entry;
-  CmmObject ***entryp;
+  
+  Set<CmmObject>  roots;
+  Set<CmmObject*> rootsLoc;
 };
 
 
@@ -135,20 +132,20 @@ private:
 
 class TempHeap : public CmmHeap 
 {
-
+  
 public:
-
+  
   void scavenge(CmmObject **);
   void collect();
   void reset();
   void weakReset();
-
+  
   TempHeap(int bytes = 100000) {
-
+    
     current = 0;
     toCollect = false;
     chunkInc = 4;
-      
+    
     chunkNum = chunkInc;
     chunkSize = bytes;
     // Can you use expand here?
@@ -158,7 +155,7 @@ public:
   }
   
   RootSet roots;
-
+  
 private: 
   
   bool toCollect;
@@ -169,7 +166,7 @@ private:
   Container **chunk;
   
   CmmObject *copy(CmmObject *);
-
+  
   GCP alloc(unsigned long);
   
   Container *inside(CmmObject *ptr) {
@@ -184,5 +181,5 @@ private:
   void expand();
 };
 
-#endif // _tempheap_h
+#endif				// _tempheap_h
 /* DON'T ADD STUFF AFTER THIS #endif */

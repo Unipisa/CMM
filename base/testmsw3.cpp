@@ -46,7 +46,6 @@ struct vector : CmmObject
 
 typedef  vector* VP;
 
-
 vector::vector(vector* x, vector* y, int v1, int v2)  
 {
   car = x;
@@ -60,7 +59,8 @@ vector::vector(vector* x, vector* y, int v1, int v2)
 int  init_global = 2,
 array_global[VECT_SIZE];
 
-void  printtree(CP zp)
+void
+printtree(CP zp)
 {
   CP  tp;
 
@@ -80,7 +80,8 @@ void  printtree(CP zp)
   printf("\n");
 }
 
-void  listtest1()
+void
+listtest1()
 {
   int  i, j;
   CP  lp, zp;
@@ -89,10 +90,8 @@ void  listtest1()
   lp = NULL;
   for (i = 0; i <= VECT_SIZE ; i++)  
     {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else
-	printf("%d\n", i);
+      if  (i % 50 == 0)
+	{ printf("."); fflush(stdout); }
       zp = new cell(NULL, lp, i);
       lp = zp;
       Cmm::heap->collect();
@@ -107,7 +106,8 @@ void  listtest1()
   printf("\n");		   
 }
 
-void  vectortest()
+void
+vectortest()
 {
   int  i, j;
   VP  lp, zp;
@@ -116,27 +116,27 @@ void  vectortest()
   lp = NULL;
   for (i = 0; i <= 100 ; i++)  
     {
-      if  (i % 15 != 14)
-		printf("%d ", i);
-	else
-		printf("%d\n", i);
+      if  (i % 10 == 0)
+	{ printf("."); fflush(stdout); }
       zp = new vector(NULL, lp, i, i);
       lp = zp;
       Cmm::heap->collect();
       zp = lp;
-      for (j = i; j >= 0 ; j--) {
+      for (j = i; j >= 0 ; j--)
+	{
 	  // mswCheckAllocatedObj(zp);
 	  // if (zp->cdr) mswCheckAllocatedObj(zp->cdr);
-	
+	  
 	  if ((zp == NULL) || (zp->value1 != j)  ||  (zp->value2 != j))
 	    printf("LP is not a good list when j = %d\n", j);
 	  zp = zp->cdr;
-	  }
 	}
+    }
   printf("\n");		   
 }
 
-CP  treetest()
+CP
+treetest()
 {
   int  i;
   CP  tp, zp;
@@ -157,7 +157,8 @@ CP  treetest()
   return(zp);
 }
 
-void  listtest2()
+void
+listtest2()
 {
   int  i, j, length = 10000, repeat = 1000;
   CP  lp, zp;
@@ -165,13 +166,10 @@ void  listtest2()
   printf("List Test 2\n");
   for (i = 0; i < repeat; i++)  
     {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else {
-	printf("%d\n", i);
-        /* Cmm::heap->collect(); */
-	 mswCheckHeap(0);
-      }
+      if  (i % 50 == 0)
+	{ printf("."); fflush(stdout); }
+      /* Cmm::heap->collect(); */
+      mswCheckHeap(0);
       /* Build the list */
       lp = NULL;
       for  (j = 0; j < length; j++)  
@@ -185,7 +183,7 @@ void  listtest2()
 	{
 	  // mswCheckAllocatedObj(zp);
 	  // if (zp->cdr) mswCheckAllocatedObj(zp->cdr);
-
+	  
 	  if ((zp == NULL) || (zp->value != j))
 	    printf("LP is not a good list when j = %d\n", j);
 	  zp = zp->cdr;
@@ -222,6 +220,4 @@ main()
 
   mswCheckHeap(1);
   mswShowInfo();
-
-  exit(0);
 }

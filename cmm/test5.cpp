@@ -1,103 +1,76 @@
-/* Test program for CMM */
-
-/* Externals */
-
-#include <stdio.h>
-#include <stdlib.h>
 #include "cmm.h"
+#include <stream.h>
 
-struct  cell : CmmObject 
+/*
+ * Tests use of reference types in objects.
+ *
+ */
+
+#define SIZE 1000
+
+class cell : public CmmObject 
 {
-  cell  *car;
-  cell  *cdr;
+public:
+  char  c;			// just to check alignment problems
+  cell  &car;
+  cell  &cdr;
   int  value;
+  cell();
   cell(cell *initcar, cell *initcdr, int initvalue);
-  void traverse();
+#ifdef FIELDTABLE
+  CmmFieldTable& getFieldTable()
+    {
+      static CmmFieldPtr fields[] = { CmmFieldPtr(&cell::car),
+                                      CmmFieldPtr(&cell::cdr) };
+      static CmmFieldTable table = { 2, fields };
+      return table;
+    }
+#else
+  void traverse()
+    {
+      CmmHeap *heap = Cmm::heap;
+      heap->scavenge(CmmRefLoc(cell, car));
+      heap->scavenge(CmmRefLoc(cell, cdr));
+    }
+#endif
 };
-
-typedef  cell* CP;
-
-void cell::traverse()  
-{
-  CmmHeap *heap = Cmm::heap;
-  heap->scavenge((CmmObject **)&car);
-  heap->scavenge((CmmObject **)&cdr);
-}
 
 
 cell::cell(cell *initcar, cell *initcdr, int initvalue)
+  : car(*initcar), cdr(*initcdr), value(initvalue)
 {
-  car = initcar;
-  cdr = initcdr;
-  value = initvalue;
 }
 
-struct vector : CmmObject 
+void
+visitTree(cell *zp)
 {
-  vector  *car;
-  vector  *cdr;
-  int  value1;
-  char bytes[1000];
-  int  value2;
-  vector(vector* x, vector* y, int v1, int v2);
-  void traverse();
-};
-
-typedef  vector* VP;
-
-void vector::traverse()
-{
-  CmmHeap *heap = Cmm::heap;
-  heap->scavenge((CmmObject **)&car);
-  heap->scavenge((CmmObject **)&cdr);
-}
-
-vector::vector(vector* x, vector* y, int v1, int v2)  
-{
-  car = x;
-  cdr = y;
-  value1 = v1;
-  value2 = v2;
-}
-
-/* Test program */
-
-int  init_global = 2,
-array_global[1000];
-
-void  printtree(CP zp)
-{
-  CP  tp;
-
-  tp = zp;
-  while  (tp != NULL)  
+  cell *tp = zp;
+  while (tp != NULL)  
     {
       printf("%x: %d  ", tp, tp->value);
-      tp = tp->cdr;
+      tp = &tp->cdr;
     }
   printf("\n");
   tp = zp;
-  while  (tp != NULL)  
+  while (tp != NULL)  
     {
       printf("%x: %d  ", tp, tp->value);
-      tp = tp->car;
+      tp = &tp->car;
     }
   printf("\n");
 }
 
-void  listtest1()
+void
+listTest1()
 {
   int  i, j;
-  CP  lp, zp;
+  cell *lp = NULL, *zp;
   
   printf("List test 1\n");
-  lp = NULL;
-  for (i = 0; i <= 1000 ; i++)  
+  for (i = 0; i <= SIZE; i++)  
     {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else
-	printf("%d\n", i);
+      if  (i % 50 == 0)
+	{ printf("."); fflush(stdout); }
       zp = new cell(NULL, lp, i);
       lp = zp;
       Cmm::heap->collect();
@@ -105,44 +78,18 @@ void  listtest1()
       for (j = i; j >= 0 ; j--)  
 	{
 	  if ((zp == NULL) || (zp->value != j))
-	    printf("LP is not a good list when j = %d\n", j);
-	  zp = zp->cdr;
+	    printf("LP is damaged at j = %d\n", j);
+	  zp = &zp->cdr;
 	}
     }
   printf("\n");		   
 }
 
-void  vectortest()
-{
-  int  i, j;
-  VP  lp, zp;
-  
-  printf("Vector test\n");
-  lp = NULL;
-  for (i = 0; i <= 100 ; i++)  
-    {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else
-	printf("%d\n", i);
-      zp = new vector(NULL, lp, i, i);
-      lp = zp;
-      Cmm::heap->collect();
-      zp = lp;
-      for (j = i; j >= 0 ; j--)  
-	{
-	  if ((zp == NULL) || (zp->value1 != j)  ||  (zp->value2 != j))
-	    printf("LP is not a good list when j = %d\n", j);
-	  zp = zp->cdr;
-	}
-    }
-  printf("\n");		   
-}
-
-CP  treetest()
+cell *
+treeTest()
 {
   int  i;
-  CP  tp, zp;
+  cell  *tp, *zp;
 
   printf("Tree test\n");
   tp = new cell(NULL, NULL, 0);
@@ -154,24 +101,22 @@ CP  treetest()
   Cmm::heap->collect();
   zp = new cell(tp, tp, 6);
   Cmm::heap->collect();
-  printtree(zp);
+  visitTree(zp);
   return(zp);
 }
 
-void  listtest2()
+void
+listTest2()
 {
-  int  i, j, length = 10000, repeat = 1000;
-  CP  lp, zp;
+  int  i, j, length = 1000, repeat = 100;
+  cell  *lp = NULL, *zp;
 
   printf("List Test 2\n");
   for (i = 0; i < repeat; i++)  
     {
-      if  (i % 15 != 14)
-	printf("%d ", i);
-      else
-	printf("%d\n", i);
+      if  (i % 50 == 0)
+	{ printf("."); fflush(stdout); }
       /* Build the list */
-      lp = NULL;
       for  (j = 0; j < length; j++)  
 	{
 	  zp = new cell(NULL, lp, j);
@@ -183,32 +128,26 @@ void  listtest2()
 	{
 	  if ((zp == NULL) || (zp->value != j))
 	    printf("LP is not a good list when j = %d\n", j);
-	  zp = zp->cdr;
+	  zp = &zp->cdr;
 	}
     }
   printf("\n");		   
 }
 
-CP  gp;		/* A global pointer */
-
+cell *gp = NULL;		/* A global pointer */
 
 void
 main()
 {
   /* List construction test */
-  listtest1();
-
-  /* List of vectors > 1 page */
-  vectortest();
+  listTest1();
 
   /* Tree construction test */
-  gp = treetest();
+  gp = treeTest();
 
-  /* 1000 10000 node lists */
-  listtest2();
+  /* 100 1000 node lists */
+  listTest2();
 
   /* Check that tree is still there */
-  printtree(gp);
-
-  exit(0);
+  visitTree(gp);
 }

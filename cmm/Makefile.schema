@@ -14,7 +14,8 @@ HFILES = machine.h cmm.h
 
 OBJS = 	cmm.o tempheap.o msw.o memory.o
 
-TESTS = test2 test3 test4 test5 test6 test7 test8 testmsw1 testmsw2 testmsw3
+TESTS = test1 test2 test3 test4 test5 test6 test7 test8 test9 \
+	testmsw1 testmsw2 testmsw3
 
 all: libCmm.a
 
@@ -45,33 +46,29 @@ stamp:
 	sed -e s:'"CMM .*"':\\\"CMM `date +%D`\\\": cmm.cpp > tmp.cpp
 	mv tmp.cpp cmm.cpp
 
+
+test1:	test1.cpp libCmm.a
+	${CPP} -o test1 ${CFLAGS} test1.cpp libCmm.a 
 test2:	test2.cpp libCmm.a
 	${CPP} -o test2 ${CFLAGS} test2.cpp libCmm.a
-
 test3:	test3.cpp libCmm.a
 	${CPP} -o test3 ${CFLAGS} test3.cpp libCmm.a
-
 test4:	test4.cpp libCmm.a
 	${CPP} -o test4 ${CFLAGS} test4.cpp libCmm.a 
-
 test5:	test5.cpp libCmm.a
 	${CPP} -o test5 ${CFLAGS} test5.cpp libCmm.a 
-
 test6:	test6.cpp libCmm.a
 	${CPP} -o test6 ${CFLAGS} test6.cpp libCmm.a 
-
 test7:	test7.cpp libCmm.a
 	${CPP} -o test7 ${CFLAGS} test7.cpp libCmm.a 
-
 test8:	test8.cpp libCmm.a
 	${CPP} -o test8 ${CFLAGS} test8.cpp libCmm.a 
-
+test9:	test9.cpp libCmm.a
+	${CPP} -o test9 ${CFLAGS} test9.cpp libCmm.a 
 testmsw1: testmsw1.c libCmm.a
 	${CPP} -g -o testmsw1 ${CFLAGS} testmsw1.c libCmm.a
-
 testmsw2: testmsw2.c libCmm.a
 	${CPP} -g -o testmsw2 ${CFLAGS} testmsw2.c libCmm.a
-
 testmsw3: testmsw3.cpp libCmm.a
 	${CPP} ${OPTS} -o testmsw3 ${CFLAGS} testmsw3.cpp libCmm.a
 

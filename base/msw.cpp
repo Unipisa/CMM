@@ -1,6 +1,6 @@
 /*****************************************************************************
  *
- *  msw.cpp: memory manager with mark&sweep garbage collection.
+ *  msw.cpp:	mark&sweep garbage collector for CMM.
  *
  *  version:    0.0.2 (30 Oct 96)
  *  authors:	Pietro Iglio
@@ -44,8 +44,8 @@
  *	- MSW_CHECK_HEAP: perform automatic heap checking before/after every
  *                        collection and tempHeap destruction.
  *	- MSW_SERIAL_DEBUG
- * 	- MSW_TRACE_ONE_PAGE
- *  	- MSW_DONT_TAG_FREE_MEM: when NDEBUG is on avoid filling with a tag
+ *	- MSW_TRACE_ONE_PAGE
+ *	- MSW_DONT_TAG_FREE_MEM: when NDEBUG is on avoid filling with a tag
  *	                         each empty/released memory object.
  *
  * Other macros that can be defined at compile time:
@@ -71,6 +71,36 @@
  *   header->nextChunk points to the next chunk class.
  *
  *---------------------------------------------------------------------------*/
+
+/*---------------------------------------------------------------------------*
+
+  MSW handles small and large objects differently.  A small object is an
+  object whose size is less than 256 bytes.
+
+  MSW gets pages from allocatePages(). Each page is marked as either
+  SINGLE, when used for small objects, or GROUPED.
+
+  Each SINGLE page contains only objects of the same exact word size.
+  Each page contains a free list linking all free objects within that page.
+
+  During the sweep phase any non marked object is released:
+  in the case of a small object, it is added to the free list of the page;
+  otherwise the corresponding set of {\em grouped} pages is added to the set of
+  available pages.
+  Non marked pages can be immediately released without scanning them.
+
+  Each object has a header which contains a bitmask (telling whether the
+  object is allocated, free or marked) and a pointer to the next free object in
+  the same page.
+  the header is before the object, therefore, when cerating a page of fixed
+  objects of size S, MSW allocates S+OBJ_ALIGNMENT bytes per object.
+
+  Adding OBJ_ALIGNMENT ensures that the next object is properly aligned.
+  [Since a rounding of S is done entering mswAlloc, one could instead add
+   PtrSize before rounding S and avoid adding OBJ_ALIGNEMENT. Beppe ]
+
+ *---------------------------------------------------------------------------*/
+
 
 #include "cmm.h"
 #include <stdlib.h>
@@ -196,7 +226,6 @@ static unsigned long	collectSerial = 0;
 #define TransparentMask		0xbb
 
 /* Page type: values for the page map */
-#define PAGE_LONG_Free		0L
 
 #define PAGE_Free		0x0
 #define PAGE_Fixed		0x1
@@ -221,8 +250,8 @@ static unsigned long	collectSerial = 0;
  * If there is an attempt of using a free memory object, it should be easy to
  * understand if the mem obj has been released during a collection.
  */
-#define EMPTY_MEM_TAG		0xdd
-#define RELEASED_MEM_TAG	0xee
+#define EMPTY_MEM_TAG		0xee
+#define RELEASED_MEM_TAG	0xdd
 
 #define PAGE_START(ptr)		(Ptr)((Word)(ptr) & ~(bytesPerPage - 1))
 
@@ -256,6 +285,8 @@ static unsigned long	collectSerial = 0;
  */
 #define pageMap		pageLink
 
+// Max number of pages for a chunk (currently used for debugging only)
+#define MAX_CHUNK_PAGES          50000
 /*---------------------------------------------------------------------------*
  *
  * :: Type Definitions
@@ -429,12 +460,12 @@ extern  int	end;	/* Compiler defined, end of data segment */
  *---------------------------------------------------------------------------*/
 
 
-static PageHeader     mswAllocFPage	     (Word size);
-static Ptr  	      mswAllocChunk	     (unsigned long, unsigned);
-static Ptr  	      mswAllocPages	     (int nPages, Word size);
+static PageHeader     mswAllocFPage	       (Word size);
+static Ptr  	      mswAllocChunk	       (unsigned long, unsigned);
+static Ptr  	      mswAllocPages	       (int nPages, Word size);
 
-static Ptr            mswGetPages        (int nPages, Word size);
-static PageHeader     mswSetupFPage      (Ptr page, Word size);
+static Ptr            mswGetPages	       (int nPages, Word size);
+static PageHeader     mswSetupFPage	       (Ptr page, Word size);
 
 static void	      mswFreeChunk	       (PageHeader);
 
@@ -450,6 +481,19 @@ static void	      mswPageSpaceSetRangeTo   (Ptr, Ptr, short);
 static void	      mswPageSpaceSet	       (Ptr, int);
 
 static void	      mswCheckFreeChunks       (void);
+
+/*---------------------------------------------------------------------------*
+ * :: mswSelect
+ *
+ * -- interface for C
+ *
+ *---------------------------------------------------------------------------*/
+
+void
+mswSelect()
+{
+  Cmm::heap = Cmm::theMSHeap;
+}
 
 /*---------------------------------------------------------------------------*
  * :: mswAlloc
@@ -494,7 +538,7 @@ mswAlloc(unsigned long size)
 
 	freePage->allocatedObjs += 1;
 	*freeList = AllocMask;
-	*(freeList-1) = TransparentMask;
+	*(Byte *)(freeList-1) = TransparentMask;
 
 	// Following assignment is needed because subsequent call to
 	// mswAllocFPage might release completely "freePage".
@@ -521,7 +565,7 @@ mswAlloc(unsigned long size)
  * :: mswAllocOpaque
  *
  * Allocates an object that is guaranteed to do not contain pointers.
- * Usefull only for big chunks, that are not traversed during the collection.
+ * Useful only for big chunks, that are not traversed during the collection.
  *
  *---------------------------------------------------------------------------*/
 
@@ -530,7 +574,7 @@ mswAllocOpaque(unsigned long size)
 {
 	if (size < MaxFixedSize) {
 	  Ptr ret = (Ptr)mswAlloc(size);
-	  *(ret-2) = OpaqueMask;
+	  *(Byte *)(ret-2) = OpaqueMask;
 	  return ret;
 	}
 	else
@@ -620,7 +664,6 @@ mswGetPages(int nPages, Word size)
 {
   Ptr            newPages;
 
-  mswDEBUG(fprintf(gcOut, "Automatic gc call...\n"););
   mswCollect();
 
   /* Expand anyway if not found enough free pages */
@@ -643,8 +686,7 @@ mswGetPages(int nPages, Word size)
     mswDEBUG(fprintf(gcOut, "Found enough pages after gc!\n"));
     return newPages;		/* <----------- */
   }
-  mswDEBUG(fprintf(gcOut,
-		   "Not found enough pages after gc! Expanding heap\n"));
+  mswDEBUG(fprintf(gcOut, "[H]"));
 
   return mswExpandHeap(nPages);
 }
@@ -712,7 +754,7 @@ mswSetupFPage(Ptr page, Word size)
 
 	for (p = firstObj; p <= lastObj; p += size1) {
 	  *p = 0;		/* mark and alloc info */
-	  SET_NEXT_FREE_OBJ(p, p + size1);   /* Next free list item */
+	  SET_NEXT_FREE_OBJ(p, p + size1); /* Next free list item */
 	  mswTagMemDEBUG({
 	    Ptr pd;
 	    for (pd = p + 1 + sizeof(Ptr); pd < p + 1 + size; pd++)
@@ -897,12 +939,13 @@ mswRealloc(void * p, unsigned long size)
 	PageHeader    page;
 
 	if (realSize >= size) {
-		/* Size of mixed objects must be updated because during mark
-		 * phase we traverse only header->objSize bytes.
+		/* Size of mixed objects must be updated because during
+		 * the mark phase we traverse only header->objSize bytes.
 		 */
-		if (PAGE_INFO(p) == PAGE_Mixed)
+		if (PAGE_INFO(p) == PAGE_Mixed) {
 			page = (PageHeader) PAGE_START(p);
 			page->objSize = size;
+		      }
 		return p;	/* <---------- */
 	}
 	else {
@@ -933,7 +976,7 @@ mswRealloc(void * p, unsigned long size)
 void *
 mswCalloc(unsigned long n, unsigned long size)
 {
-	Ptr	mem = (Ptr) mswAlloc(n * size);
+	void * mem = mswAlloc(n * size);
 
 	return memset(mem, 0, n * size);
 }
@@ -1085,7 +1128,7 @@ mswAddToFreeChunks(Ptr ptr, int nPages)
 		pPrev = &(chunks->nextChunkGroup);
 		chunks = chunks->nextChunkGroup;
 	}
-	/* This point is reached iif this is the maximum chunk.
+	/* This point is reached if this is the maximum chunk.
 	 * Add the chunk to the tail of the list.
 	 */
 	*pPrev = chunk;
@@ -1227,9 +1270,9 @@ static Ptr
 mswMergeChunkWithNeighbors(Ptr chunk, int* pNPages)
 {
 	int nPages    = *pNPages;
-	page baseIndex = GCPtoPage(chunk);
-	page limitIndex= GCPtoPage(heapEnd);
-	page index     = baseIndex;
+	Page baseIndex = GCPtoPage(chunk);
+	Page limitIndex= GCPtoPage(heapEnd);
+	Page index     = baseIndex;
 	Ptr newChunk  = chunk;
 	FreePageHeader followChunk;
 
@@ -1367,6 +1410,8 @@ mswFreeChunk(PageHeader header)
 {
 	int 	nPages = header->nPages;
 
+	assert(nPages > 0 && nPages < MAX_CHUNK_PAGES);
+
 	mswPageMapSet((Ptr)header, nPages, PAGE_Free);
 	assert(tempHeapInfo == NULL);
 //	if (tempHeapInfo)
@@ -1468,7 +1513,7 @@ mswMarkFromTo(GCP from, GCP to)
 	    assert(*(bp-1) == OpaqueMask ||
 		   *(bp-1) == TransparentMask);
 
-	    if (*(bp-1) == OpaqueMask)
+	    if (*(Byte *)(bp-1) == OpaqueMask)
 	      continue;
 
 	    mswMarkFromTo((GCP)(bp+1),
@@ -1545,7 +1590,7 @@ mswMarkFromTo(GCP from, GCP to)
       assert(*(bp-1) == OpaqueMask ||
 	     *(bp-1) == TransparentMask);
 		
-      if (*(bp-1) == OpaqueMask)
+      if (*(Byte *)(bp-1) == OpaqueMask)
 	continue;
 		
       MarkStackPush((GCP)(bp+1));
@@ -1629,7 +1674,7 @@ mswMarkFromTo(GCP from, GCP to)
       assert(*(bp-1) == OpaqueMask ||
 	     *(bp-1) == TransparentMask);
 
-      if (*(bp-1) == OpaqueMask)
+      if (*(Byte *)(bp-1) == OpaqueMask)
 	continue;
 
       MarkStackPush(pt+1);
@@ -1940,32 +1985,27 @@ mswCollect()
   Word heapSize = (lastHeapPage - firstHeapPage) * bytesPerPage;
 
   if (heapSize < (Word)Cmm::gcThreshold)
-    mswDEBUG(fprintf(gcOut,
-		     "heap size < gc threshold: skipping GC\n"));
+    ; // mswDEBUG(fprintf(gcOut, "heap size < gc threshold: skipping GC\n"));
   else {
-    mswDEBUG(fprintf(gcOut, "-> GC request ACCEPTED.\n"););
+    mswDEBUG(fprintf(gcOut, "Calling GC...\n"););
     mswCollectNow();
   }
 }
 
 /*---------------------------------------------------------------------------*
  *
- * :: mswInit()
+ * :: MarkAndSweep()
  *
  *---------------------------------------------------------------------------*/
 
-void
-mswInit()
+MarkAndSweep::MarkAndSweep()
 {
-	extern  void	CmmInit(void);
 	int 	i, j, k;
 	Word	firstObjOff, bp = 0;
 	Word	lastObjOff;
 	Word    size1, counter;
-	static  int initialized = 0;
 
-	if (initialized) return;
-	initialized = 1;
+	Cmm::theMSHeap = this;	// needed for allocatePages()
 
 	freeChunks = NULL;
 
@@ -1977,8 +2017,7 @@ mswInit()
 	 * same size.
 	 */
 	for (i = PtrSize; i < MaxFixedSize; i += PtrSize) {
-	  firstObjOff = (Word) PTR_ALIGN(sizeof(PageHeaderStruct)+1,
-					 OBJ_ALIGNMENT) -1;
+	  firstObjOff = FirstObjOffset;
 	  FPagesInfo[i].firstObjOffset = firstObjOff;
 	  FPagesInfo[i].basePointerv = (Ptr *)
 	    malloc(sizeof(Ptr) * bytesPerPage);
@@ -2028,7 +2067,7 @@ mswInit()
 	    (lastObjOff - firstObjOff) / size1;
 	}
 
-	CmmInit();
+	CmmHeap::init();
 	heapStart = (Ptr)pageToGCP(firstHeapPage);
 	heapEnd   = heapStart;
 
@@ -2061,7 +2100,7 @@ static void	scanFPageRoots(PageHeader);
 static void	scanMixedPageRoots(PageHeader);
 
 void
-MarkAndSweep::scanRoots(page page)
+MarkAndSweep::scanRoots(Page page)
 {
 	unsigned pageInfo = PAGE_INFO(page);
 	PageHeader header = (PageHeader)pageToGCP(page);
@@ -2083,7 +2122,7 @@ MarkAndSweep::scanRoots(page page)
 
 	    for (ptr = (long*) obj + 1 + sizeof(Ptr);
 		 ptr < (long*) obj + 1 + size; ptr++)
-	      promotePage((GCP) ptr);
+	      promotePage((GCP)ptr);
 	  }
 	} else if (pageInfo == PAGE_Mixed) {
 	  long*	ptr;
@@ -2094,7 +2133,7 @@ MarkAndSweep::scanRoots(page page)
 	  end = (long*) FirstObjOffset + 1 + header->objSize;
 	
 	  for (ptr = (long*) FirstObjOffset + 1; ptr < end; ptr++)
-	    promotePage(ptr);
+	    promotePage((GCP)ptr);
 	}
 }
 
@@ -2132,7 +2171,7 @@ mswRegisterRoot(void * p)
 static void
 mswTempHeapFreePages(void)
 {
-	page	page;
+	Page	page;
 	totReleasedPages = 0;
 
 	/* NOTE: the following loop is ugly because optimized */
@@ -2334,7 +2373,7 @@ mswShowTempMem(void)
 	const int pagesPerLine = 72;
 
 	fprintf(gcOut,
-		"+++++ (. = Free, # = Fixed, B/b = BigObj, O = Other) ++++");
+		"+++++ (T = Temporary, - = Permanent) ++++");
 
 	for (i = base; i < top; i++) {
 	  if (j == 0) {
@@ -2591,7 +2630,8 @@ mswCheckFPage(Ptr page)
 	firstObjOff = FPagesInfo[size].firstObjOffset;
 
 	for (p = page + firstObjOff; p <= hi; p += size1) {
-	  assert(*(p-1) == TransparentMask || *(p-1) == OpaqueMask);
+	  assert(*(Byte *)(p-1) == TransparentMask
+		 || *(Byte *)(p-1) == OpaqueMask);
 	  assert(*p == AllocMask || *p == FreeMask);
 	  if (*p == AllocMask)
 	    allocatedObjs += 1;
@@ -2810,8 +2850,30 @@ getPtrInfo(Ptr p)
 	  base = GET_OBJ_BASE(p, page);
 	  fprintf(gcOut, "pointer base: %lx\n", base);
 	  if (base == p) {
-	    fprintf(gcOut, "WARNING: the pointer points before the start of the object!\n");
+	    fprintf(gcOut, "WARNING: the pointer points before the beginning of a fixed object!\n");
 	    return;
+	  }
+	  switch (*base) {
+	  case AllocMask:
+	    fprintf(gcOut, "STATE: allocated\n"); break;
+	  case MarkMask:
+	    fprintf(gcOut, "STATE: marked\n"); break;
+	  case FreeMask:
+	    fprintf(gcOut, "STATE: free\n"); break;
+	  default:
+	    fprintf(gcOut,
+		    "WARNING: STATE is not MarkMask | AllocMask | FreeMask! \n");
+	    break;
+	  }
+	  switch (*(base-1)) {
+	  case OpaqueMask:
+	    fprintf(gcOut, "Obj is OPAQUE \n"); break;
+	  case TransparentMask:
+	    fprintf(gcOut, "Obj is TRANSPARENT \n"); break;
+	  default:
+	    fprintf(gcOut,
+		    "WARNING: not registred as OPAQUE or TRANSPARENT! \n");
+	    break;
 	  }
 	  break;
 	case PAGE_Next: {
@@ -2830,7 +2892,7 @@ getPtrInfo(Ptr p)
 	    index -= 1;
 	    assert(index > 0);
 	  }
-	  p = pageToGCP(index);
+	  p = (Ptr)pageToGCP(index);
 	  goto LAB_PageMixed;
 	}
 	case PAGE_Mixed:
@@ -2902,7 +2964,7 @@ pageIndex(Ptr p)
 Ptr
 pageFromIndex(int index)
 {
-	return pageToGCP(index);
+	return (Ptr)pageToGCP(index);
 }
 
 int

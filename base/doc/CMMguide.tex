@@ -29,13 +29,12 @@ USENIX C++ paper;
 \subsection {Known Shortcomings}
 \begin{itemize}
 \item Heap programming still undocumented
-\item Multiple inheritance not yet supported
-\item Finalization Protocol missing
+\item Finalization Protocol not included
 \end{itemize}
 
 \section{Introduction}
 
-This is the POSSO specification for Customisable Memory Management (CMM).  CMM
+This is the PoSSo specification for Customisable Memory Management (CMM).  CMM
 is a {\tt C++} Memory Management facility, aiming to allow full integration
 between coexisting different memory management techniques.  Refer to [Attardi
 93] for a detailed paper on CMM.
@@ -63,14 +62,15 @@ The CMM user interface provides constructs to specify in which Heap to
 allocate objects.
 
 
-A dynamic class must derived from the class {\tt CmmObject} provided by the CMM.
-The default collector calls the method {\tt traverse} on dynamic objects to
-identify their internal pointers to other dynamic objects.  Users have to
+A dynamic class must derived from the class {\tt CmmObject} provided by the
+CMM.  The default collector calls the method {\tt traverse} on dynamic objects
+to identify their internal pointers to other dynamic objects.  Users have to
 provide {\tt traverse} methods for each class whose data members contain
 pointers to dynamic objects.  {\tt traverse} must be defined according to some
 well defined rules (given below), because it implements the interface between
 the CMM and user defined dynamic objects.  The following is the function
 prototype for {\tt traverse}:
+
 \begin{verbatim}
 void traverse()
 \end{verbatim}
@@ -220,20 +220,31 @@ this way the extra memory allocated would be neither a {\tt C++} object nor a
 
 \subsection{Array of CmmObject's}
 
-The following class can be used to create arrays of CmmObject's like follows:
+Class {\tt CmmArray} can be used to create arrays of {\tt CmmObject}'s as
+follows.  To create an array of objects of class {\tt Item}, overload the {\tt
+  new()} operator for class {\tt Item}:
 
 \begin{verbatim}
-       CmmArray<MyClass> myVector = * new (100) CmmArray<MyClass> ;
+     void*
+     Item::operator new[](size_t size)
+     {
+       return sizeof(size_t) + (char*)new(size) CmmArray<Item>;
+     }
 \end{verbatim}
-       
-The operator [] can be used to get CmmObjects.
+
+Then you can create arrays of {\tt Item} normally, for instance:
 
 \begin{verbatim}
-       myVector[i]->print();
+     Item* anArrayOfItems = new Item[20];
 \end{verbatim}
-or:
+
+The constructor for class {\tt Item} with no argument will be called for each
+{\tt Item} in the array.  The operator [] can be used to access such arrays,
+e.g:
+
 \begin{verbatim}
-       MyClass mc = myVector[3];
+     anArrayOfItems[i].print();
+     Item anItem = anArrayOfItems[3];
 \end{verbatim}
 
 \subsection{A sample program}

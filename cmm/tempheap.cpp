@@ -157,7 +157,8 @@ RootSet::scan(CmmHeap *heap)
   roots.begin();
   while (objPtr = roots.get()) objPtr->traverse();
   rootsLoc.begin();
-  while (objPtrLoc = rootsLoc.get()) heap->scavenge(objPtrLoc);
+  while (objPtrLoc = rootsLoc.get())
+    heap->scavenge(objPtrLoc);
   Cmm::heap = oldHeap;
 }
 
@@ -206,14 +207,14 @@ TempHeap::copy(CmmObject *ptr)
 }
 
 void
-TempHeap::scavenge(CmmObject **ptr)
+TempHeap::scavenge(CmmObject **loc)
 {
-  GCP pp = (GCP)*ptr;
+  GCP pp = (GCP)*loc;
   if (OUTSIDE_HEAPS(GCPtoPage(pp)))
     return;
 
-  CmmObject *oldPtr = basePointer(pp);
-  int offset = (int)pp - (int)oldPtr;
+  CmmObject *oldPtr = (CmmObject *)basePointer(pp);
+  int offset = (Word)pp - (Word)oldPtr;
 
   if (!inside(oldPtr))
     {
@@ -234,12 +235,12 @@ TempHeap::scavenge(CmmObject **ptr)
 #   else
       (MARKED(oldPtr))
 #   endif
-	*ptr = (CmmObject *)((int)oldPtr->getForward() + offset);
+	*loc = (CmmObject *)((Word)oldPtr->getForward() + offset);
   else
     {
       CmmObject *newObj = copy(oldPtr);
       oldPtr->setForward(newObj);
-      *ptr = (CmmObject *)((int)newObj + offset);
+      *loc = (CmmObject *)((Word)newObj + offset);
     }
 }
 

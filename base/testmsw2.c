@@ -18,7 +18,6 @@ test()
 		v1[i] = (char *) mswAlloc(i);
 		v1[i] = (char *) mswAllocOpaque(i * 80);
 	}
-
 	for (i = 1; i < VECT_SIZE; i++) {
 		v1[i] = (char *) mswAllocOpaque(i * 80);
 	}
@@ -32,19 +31,14 @@ main(int argc, char ** argv)
 
 	if (argc == 2)
 	      par = atoi(argv[1]);
-
 	if (par)
 	      printf("\n+++++ Using collector +++++\n");
-
-	mswInit();
-
 	test();
 	if (par) 
 	      mswCollect();
 	test();
 	if (par)
 	      mswCollect();
-
 	mswShowInfo();
 	mswCheckHeap(1);
 }

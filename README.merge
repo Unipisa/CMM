@@ -1,0 +1,113 @@
++++ Instructions to perform a merge of two versions using an ancestor version
+
+This file explains how to syncronize different versions of the same
+distribution using an ancestor copy. The technique is very simple, but the
+instructions must be followed carefully.
+The instructions refer to the CMM distributions, but are very general and
+can be used in other similar contexts.
+
+Suppose we have an official directory containing CMM v. 1.0:
+
+  cmm-1.0
+
+This is a freezed version, all developers copy this version on their local disk
+and start working on cmm-1.0. 
+
+>> Before doing any local change to cmm-1.0, you must create their own
+   ANCESTOR COPY:
+   
+   tar cf - cmm-1.0 | gzip >my-home/cmm-ancestor.tgz
+   cp -rp cmm-1.0 my-home/cmm-working
+
+Then, you can start working on the local copy in cmm-working.
+Suppose that, e.g. after one week, you fixed some bugs, added some improvements
+and you think it is time to update the official distribution in cmm-1.0.
+Probably, in the meantime, somebody else might have changed cmm-1.0.
+
+>> Thus, before proceeding, you recreate your ancestor directory and use the
+devtools/show-cmm-status utility to check the state of changes:
+
+   cd my-home
+   gunzip <cmm-ancestor.tgz | tar xvf -
+   (name the extracted directory: cmm-ancestor)
+   
+Since at the time you created the ancestor you were syncronized with the
+official distribution, the derivation tree is:
+
+                   my-ancestor
+                      /   \
+		     /     \
+                 cmm-1.0  cmm-working
+
+Now you are going to create the new official distribution:
+
+   mkdir cmm-new
+
+>> Run show-cmm-status:  (run it w/out arguments to get help)
+
+     devtools/show-cmm-status my-home/cmm-working cmm-1.0 my-home/cmm-ancestor
+
+You will get output like:
+
+   "msw.cpp" can be copied
+   File "xxx" does not exist in cmm-ancestor (new file?)
+   "cmm.cpp" must be merged -------
+
+   ...
+
+
+The first line means that you changed "msw.cpp" and nobody else did, so:
+
+   cp cmm-working/msw.cpp cmm-new/.
+
+Do exactly the same for any file that can be copied.
+The second line means that you added "xxx" after the ancestor was created,
+so it can be copied as well:
+
+  cp cmm-working/xxx cmm-new/.
+
+Finally, for each file that must be merged, run the 
+"emerge-files-with-ancestor" command, and specify:
+
+    File A: cmm-working/cmm.cpp
+    File B: cmm-1.0/cmm.cpp
+    Ancestor: cmm-ancestor/cmm.cpp
+
+Emacs will create tree windows: the bottom window is the merge window.
+Use keys:
+
+     n/p  -> next/previous diff
+     a/b  -> accept "File A" or "File B" change
+
+After the last difference, you can use "q" to successfully terminate the
+merge, and save the resulting file in cmm-new/cmm.cpp
+Note that in the emacs status bar there is an "A" ("B") if the current
+difference is from file A (B), and a "*" if there is a conflict, i.e.
+both file A and file B have been changed in the same zone.
+Please be carefull when there is a "*", probably you will need to manually
+edit the merged file.
+
+The merge task can take some time, unless you merge very frequently
+(=> less differences). Consider, anyway, that generally there are
+only one or two files to merge.
+
+After you merged/copied all files, compile everything and run tests.
+
+At the very end, you can remove the official cmm-1.0 (create a backup first!),
+move cmm-new to cmm-1.0 (now this is the official version).
+Create a new ancestor copy and a local working copy from the new cmm-1.0
+directory and start working again.
+
+---------------------------------------------------------------------------
+
+Quick reminder:
+
+- at the time you create a local copy of the official distribution, create
+  a local ancestor copy;
+- when you decide to apply your changes to the official distribution,
+  create cmm-new, run "devtools/show-cmm-status", and copy/merge files
+  opportunely in cmm-new;
+- compile and test everything;
+- backup official distribution, make cmm-new the new official distribution,
+  create again an ancestor copy and a local copy;
+

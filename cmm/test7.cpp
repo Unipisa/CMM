@@ -1,6 +1,6 @@
 
 /*
- * Test for CmmArray
+ * Test for CmmArray (requires GNU C++)
  */
 
 #include "cmm.h"
@@ -48,7 +48,7 @@ Item::operator new[](size_t size)
 }
 
 void
-test()
+main()
 {
   int  i, j;
   VP  lp, zp;
@@ -74,13 +74,4 @@ test()
 	}
     }
   printf("\n");		   
-}
-
-void
-main()
-{
-  /* List of Items > 1 page */
-  test();
-
-  exit(0);
 }

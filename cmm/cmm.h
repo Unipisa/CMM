@@ -53,16 +53,19 @@
        the method C::traverse must contain scavenge(&x);
 
    (b) for a class containing an instance of a collected object, say
-       class C { GcClass x; }, the method C::traverse must contain
+       class C { CmmClass x; }, the method C::traverse must contain
        x.traverse();
 
    (c) for a class derived from another collected class, say
-       class C: GcClass {...}, the method C::traverse must contain
-       GcClass::traverse();
+       class C: CmmClass {...}, the method C::traverse must contain
+       CmmClass::traverse();
 
-   (d) for a class deriving from a virtual base class, say class
-       C: virtual GcClass {...}, the method C::traverse must contain
-       scavenge(VirtualBase(GcClass));
+   (d) for a class containing a reference, say class C { type &x; },
+       the method C::traverse must contain scavenge(CmmRefLoc(C, x));
+
+   (e) for a class deriving from a virtual base class, say class
+       C: virtual CmmClass {...}, the method C::traverse must contain
+       scavenge(VirtualBase(CmmClass));
 
    For example,
 
@@ -301,12 +304,6 @@
 #include "machine.h"
 #include "msw.h"
 
-#ifdef _WIN32
-typedef int	bool;
-#define false	0
-#define true	1
-#endif
-
 /*---------------------------------------------------------------------------*
  *
  * -- Enable CMM features or verbosity
@@ -314,13 +311,13 @@ typedef int	bool;
  *---------------------------------------------------------------------------*/
 
 #ifdef CMM_VERBOSE
-  #define WHEN_VERBOSE(flag, code)	if (Cmm::verbose & flag) code
+  #define WHEN_VERBOSE(flag, code)	if (Cmm::verbose & flag) {code;}
 #else
   #define WHEN_VERBOSE(flag, code)
 #endif
 
 #ifdef CMM_FEATURES
-  #define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) code
+  #define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) {code;}
 #else
   #define WHEN_FLAGS(flag, code)
 #endif
@@ -351,15 +348,29 @@ extern bool  isTraced(void *);
 
 /*---------------------------------------------------------------------------*
  *
- * Support for rule (d) above. Compiler dependent.
+ * Support for rule (d) above.
+ *
+ *---------------------------------------------------------------------------*/
+
+/* this involves runtime calculation */
+extern const int CmmLocOffsets[];
+
+#define CmmRefLoc(T, ref) \
+  ((GcObject **)((Word)this + sizeof(GCP) * (int)(&((T*)CmmLocOffsets)->ref)))
+
+/* this is resolved at compile time */
+#define CmmRefLocRel(field, offset)	((GcObject **)(&field + offset))
+
+/*---------------------------------------------------------------------------*
+ *
+ * Support for rule (e) above. Compiler dependent.
  *
  *---------------------------------------------------------------------------*/
 
 #ifdef __GNUG__
 #define VirtualBase(A) &(_vb$ ## A)
-#endif
+#elif defined(__sgi) || defined(_sgi) || defined(sgi)
 // This should really be #if defined (CFRONT)
-#if defined(__sgi) || defined(_sgi) || defined(sgi)
 #define VirtualBase(A) &(P ## A)
 #endif
 
@@ -395,26 +406,25 @@ const	CMM_TSTOBJ   =   2;	/* Extensively test objects		*/
 #define HEADER_SIZE	1	/* header size in words */
 
 #if HEADER_SIZE
-#define MAKE_TAG(index) ((index) << 21 | 1)
-#define MAKE_HEADER(words, tag) (Ptr)((tag) | (words) << 1)
+# define MAKE_TAG(index) ((index) << 21 | 1)
+# define MAKE_HEADER(words, tag) (Ptr)((Word)(tag) | (words) << 1)
 
-#define HEADER_TAG(header) ((Word)(header) >> 21 & 0x7FF)
-#define HEADER_WORDS(header) ((Word)(header) >> 1 & 0xFFFFF) // includes HEADER_SIZE
-#define maxHeaderWords 0xFFFFF		/* 1048575 = 4,194,300 bytes */
-#define FORWARDED(header) (((Word)(header) & 1) == 0)
+# define HEADER_TAG(header) ((Word)(header) >> 21 & 0x7FF)
+# define HEADER_WORDS(header) ((Word)(header) >> 1 & 0xFFFFF) // includes HEADER_SIZE
+# define maxHeaderWords 0xFFFFF		/* 1048575 = 4,194,300 bytes */
+# define FORWARDED(header) (((Word)(header) & 1) == 0)
 #else
 /* an object is forwarded if it is marked as live and contained in FromSpace */
-#define FORWARDED(gcp) ((MARKED(gcp) && inFromSpace(GCPtoPage(gcp))))
-#define MAKE_HEADER(words, tag)
+# define FORWARDED(gcp) ((MARKED(gcp) && inFromSpace(GCPtoPage(gcp))))
 #endif
 
 #if HEADER_SIZE
-#define ALLOC_SETUP(object, words) \
+# define ALLOC_SETUP(object, words) \
   *object = MAKE_HEADER(words, MAKE_TAG(2)); \
   object += HEADER_SIZE; \
   SET_OBJECTMAP(object)
 #else
-#define ALLOC_SETUP(object, words) \
+# define ALLOC_SETUP(object, words) \
   SET_OBJECTMAP(object)
 #endif
 
@@ -440,15 +450,15 @@ extern int   tablePages;	/* # of pages used by tables		*/
 extern int   freePages;		/* # of pages not yet allocated		*/
 
 
-#define WORD_INDEX(p)	(((unsigned)(p)) / (bitsPerWord * bytesPerWord))
-#define BIT_INDEX(p)	((((unsigned)(p)) / bytesPerWord) & (bitsPerWord - 1))
+#define WORD_INDEX(p)	(((Word)(p)) / (bitsPerWord * bytesPerWord))
+#define BIT_INDEX(p)	((((Word)(p)) / bytesPerWord) & (bitsPerWord - 1))
 
 #define IS_OBJECT(p)	   (objectMap[WORD_INDEX(p)] >> BIT_INDEX(p) & 1)
-#define SET_OBJECTMAP(p)   (objectMap[WORD_INDEX(p)] |= 1 << BIT_INDEX(p))
-#define CLEAR_OBJECTMAP(p) objectMap[WORD_INDEX(p)] &= ~(1 << BIT_INDEX(p))
+#define SET_OBJECTMAP(p)   (objectMap[WORD_INDEX(p)] |= 1L << BIT_INDEX(p))
+#define CLEAR_OBJECTMAP(p) objectMap[WORD_INDEX(p)] &= ~(1L << BIT_INDEX(p))
 
 #define MARKED(p)	(liveMap[WORD_INDEX(p)] >> BIT_INDEX(p) & 1)
-#define MARK(p)		(liveMap[WORD_INDEX(p)] |= 1 << BIT_INDEX(p))
+#define MARK(p)		(liveMap[WORD_INDEX(p)] |= 1L << BIT_INDEX(p))
 
 
 /*---------------------------------------------------------------------------*
@@ -467,10 +477,10 @@ extern int   freePages;		/* # of pages not yet allocated		*/
 #ifdef CMM_PAGE_SIZE
 #  define bytesPerPage CMM_PAGE_SIZE
 #else
-#  define bytesPerPage 512
+#  define bytesPerPage (128*sizeof(Word))
 #endif
 #define wordsPerPage (bytesPerPage / bytesPerWord)
-#define bytesPerWord (sizeof(long))
+#define bytesPerWord (sizeof(Word))
 #define	bitsPerWord  (8*bytesPerWord)
 
 /* Page number <--> pointer conversion */
@@ -503,7 +513,7 @@ extern int   freePages;		/* # of pages not yet allocated		*/
 
 #define OUTSIDE_HEAPS(page) \
 	(page < firstHeapPage || page > lastHeapPage || \
-	 pageHeap[page] == UNCOLLECTEDHEAP)
+	 (Word)pageHeap[page] <= (Word)UNCOLLECTEDHEAP)
 
 #define HEAPPERCENT(x) (((x)*100)/(Cmm::theDefaultHeap->reservedPages \
 			+ freePages))
@@ -583,9 +593,11 @@ class CmmHeap
       opaque = false;
     }
 
+  static void init();
+
   virtual GCP   alloc(Word) = 0;
   virtual void  reclaim(GCP) {};
-  virtual void  scanRoots(int) {};
+  virtual void  scanRoots(Page) {};
 
   virtual void collect()
     {
@@ -593,6 +605,8 @@ class CmmHeap
     }
 
   virtual void scavenge(CmmObject **) {};
+
+  inline GCP allocAtomic(Word size) { return alloc(size); };
 
   inline bool inside(GCP ptr)
     {
@@ -648,9 +662,10 @@ public:
 
   DefaultHeap();
   GCP alloc(Word);
+  GCP allocAtomic(Word);
   void reclaim(GCP) {}		// Bartlett's delete does nothing.
   void collect();		// the default garbarge collector
-  void scavenge(CmmObject **ptr);
+  void scavenge(CmmObject **);
   GCP  getPages(int);
 
   int usedPages;		// pages in actual use
@@ -659,8 +674,12 @@ public:
   Page firstReservedPage;	// first page used by this Heap
   Page lastReservedPage;	// last page used by this Heap
 
-#ifndef NO_SCAN_OPT
 private:
+  void promotionPhase();
+  void compactionPhase();
+  static GCP move(GCP);
+
+#ifndef NO_SCAN_OPT
   Page scanPage;		// page being scanned
   GCP scanPtr;			// point reached in scanning scanPage
 #endif
@@ -674,28 +693,24 @@ private:
 
 class MarkAndSweep : public CmmHeap
 {
-
  public:
 
   MarkAndSweep();
-  inline GCP 		alloc	(Word size)
-  					       { return (GCP) mswAlloc(size); }
-  inline void 		reclaim	(GCP p)        { mswFree(p); }
-  inline void 		collect	()	       { mswCollect(); }
-  inline void*		realloc (void * p, Word size)
-                              { return mswRealloc(p, size); }
-  inline void*		calloc  (Word n, Word size)
-  			      { return mswCalloc(n, size); }
+  inline GCP 	alloc(Word size){ return (GCP) mswAlloc(size); }
+  inline GCP	allocAtomic(Word size) { return (GCP) mswAllocOpaque(size); }
+  inline void	reclaim(GCP p)	{ mswFree(p); }
+  inline void	collect()	{ mswCollect(); }
+  inline void*	realloc(void * p, Word size)	{ return mswRealloc(p, size); }
+  inline void*	calloc(Word n, Word size)	{ return mswCalloc(n, size); }
 
-  inline void		checkHeap()		{ mswCheckHeap(1); }
-  inline void		showInfo()		{ mswShowInfo(); }
+  inline void	checkHeap()	{ mswCheckHeap(1); }
+  inline void	showInfo()	{ mswShowInfo(); }
 
-  void			tempHeapStart ()	{ mswTempHeapStart(); }
-  void			tempHeapEnd   ()	{ mswTempHeapEnd(); }
-  void			tempHeapFree  ()	{ mswTempHeapFree(); }
+  void		tempHeapStart()	{ mswTempHeapStart(); }
+  void		tempHeapEnd()	{ mswTempHeapEnd(); }
+  void		tempHeapFree()	{ mswTempHeapFree(); }
 
-  void			scanRoots(Page page);
-
+  void		scanRoots(Page page);
 };
 
 /*---------------------------------------------------------------------------*
@@ -704,13 +719,26 @@ class MarkAndSweep : public CmmHeap
  *
  *---------------------------------------------------------------------------*/
 
+#ifdef FIELDTABLE
+typedef CmmObject* (CmmObject::*CmmFieldPtr);
+
+struct CmmFieldTable {
+	int count;
+	CmmFieldPtr* fields;
+};
+#endif
+
 class CmmObject
 {
 public:
 
-  virtual void traverse() {} ;
-
-  virtual ~CmmObject() {} ;
+# ifdef FIELDTABLE
+  virtual CmmFieldTable& getFieldTable();
+  virtual void traverse();
+#else
+  virtual void traverse() {};
+# endif
+  virtual ~CmmObject() {};
 
   CmmHeap *heap() { return pageHeap[GCPtoPage(this)]; }
 
@@ -724,7 +752,6 @@ public:
 
 #ifdef MARKING
   inline void mark() { MARK(this); }
-
   inline bool marked() { return (MARKED(this)); }
 #endif
 
@@ -753,9 +780,13 @@ public:
   void* operator new(size_t, CmmHeap* = Cmm::heap);
   void operator delete(void*);
 
-#ifndef _WIN32
+#ifdef ANSI_CPP
   void* operator new[](size_t size, CmmHeap* = Cmm::heap);
   void  operator delete[](void*);
+#endif
+
+#ifdef CMM_ID
+  int ID;
 #endif
 };
 
@@ -779,6 +810,7 @@ public:
  *
  *---------------------------------------------------------------------------*/
 
+#ifdef ANSI_CPP
 template <class T>
 class CmmArray : public CmmObject
 {
@@ -806,16 +838,16 @@ public:
 
 private:
   size_t count;			// the __GNUC__ initializes it after new[]
-#ifdef DOUBLE_ALIGN
+#ifdef ARRAY_PADDING
   size_t padding;
 #endif
   T ptr[0];			// avoid call to T constructor
 };
+#endif
 
 /*---------------------------------------------------------------------------*/
-
-inline void CmmHeap::
-visit(CmmObject* ptr)
+inline void
+CmmHeap::visit(CmmObject* ptr)
 {
 #ifdef MARKING
   if (!ptr->marked())
@@ -956,4 +988,39 @@ class Set
   int  freed;
   int  iter;
 };
+
+/*---------------------------------------------------------------------------*
+ *
+ * --  Roots
+ *
+ * Roots explicitely registered with the garbage collector are contained in
+ * the following structure, allocated from the non-garbage collected heap.
+ *
+ *---------------------------------------------------------------------------*/
+
+typedef struct
+{
+  GCP	     addr;		/* Address of the roots */
+  int  	     bytes;		/* Number of bytes in the roots */
+} RootArea;
+
+class RootAreas
+{
+ public:
+  RootAreas();
+  void insert(void * addr, int bytes);
+  void erase(void* addr);
+  RootArea* get();
+  void begin();
+
+private:
+  RootArea*	entries;
+  int		last;
+  int		max;
+  int		freed;
+  int		iter;
+};
+
+extern RootAreas	roots;	/* areas registered as containing roots */
+
 #endif				// _CMM_H

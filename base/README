@@ -49,9 +49,10 @@ CMM has been tested on:
 
  - SunOS 4.x
  - Solaris 2.x
- - Linux 1.x
+ - Linux 1.x, 2.x
  - AIX (RS6000)
  - SGI
+ - Win32 (Windows 95, Windows NT)
 
 but it should run without changes also on HPUX, NeXTOS and DOS (djgpp).
 If you are interest in some other platforms you can send mail to

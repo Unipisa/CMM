@@ -1,3 +1,286 @@
+Wed Aug  6 11:38:21 1997  Giuseppe Attardi  <attardi@omega>
+
+	* Released version 1.9
+
+	Passed all tests on:
+	OSF1 V3.2 41 alpha
+	Linux 2.0.18 i686
+	SunOS 5.3 sparc
+	SunOS 4.1.3_U1 sparc
+	Win32 VC++ 4.0 (except testmsw3 with debug)
+
+	* cmm.cpp (Cmm): ensure max n. of pages will fit in a Page
+
+	* cmm.cpp (promotePage, scavenge, isTraced): page must be declared Word
+	  or else on 64bit architectures test for OUTSIDE_HEAPS may fail.
+
+	* cmm.cpp (collect): use
+	  bool totalCollection = queueHead == 0;
+	  to determine if current collection is a total one.
+
+Sun Aug  3 21:29:30 1997  Giuseppe Attardi  <attardi@omega>
+
+	* msw.cpp: added some comments on the implementation.
+
+Sat Aug  2 13:39:18 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp:
+	 CmmMove() turned into static DefaultHeap::move()
+	 CmmInit() into static CmmHeap::init()
+
+Fri Aug  1 19:44:45 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (collect): do not collect immediately after a
+	generational collection fails to recover enough space, but
+	continue until next collection.
+	This improves space requirements by over 20%.
+
+	* CMM.cpp (shouldExpandHeap): test with usedPages instead of
+	stablePages. Inside collect() they are the same.
+
+Thu Jul 31 12:04:31 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (collect): CLOSE_CURRENT_PAGE before inner collection
+
+	* cmm.cpp (collect): reassign usedPages before inner promotionPhase()
+
+	* cmm.cpp (CmmMove): #if HEADER_ALIGN -> #ifdef HEADER_ALIGN
+	(was degrading katsura6 on SunOS)
+
+Tue Jul 29 10:11:03 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (shouldExpandHeap): Cast to (int) required by VC++
+
+Mon Jul 28 20:02:42 1997  Giuseppe Attardi  <attardi@omega>
+
+	* machine.h (DOUBLE_ALIGN): undefined for alpha
+
+Fri Jul 25 19:59:17 1997  Giuseppe Attardi  <attardi@omega>
+
+	* testmsw1.c (strFromInt): use of strlen() ony on SunOS
+
+	* cmm.cpp: port to Digital alpha completed
+	
+	* machine.h (ARRAY_PADDING): added flag for architectures were
+	padding for arrays is used
+
+	* cmm.h (CmmArray): padding for arrays applies for sparc
+
+Wed Jul 23 17:44:39 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (collect): split collect() into promotionPhase() and
+	  compactionPhase(). This allows us to avoid recursive call to
+	  perform total collection.
+	  The total collection after a generational collection, before
+	  compactionPhase() adds at the end of the queue the pages which
+	  were copied within CmmMove(). 
+	  These could not be left at the beginning of the queue, since
+	  no root pointers point into them, therefore scanning them first
+	  would be useless and when later pointers into them are found,
+	  traverse() would go wildly recursive since such pages appear
+	  as scanned.
+	  This avoids stack overflow on Alpha for test8.
+
+	* cmm.cpp (emptyStableSpace): decrease stablePages by number of pages
+	  moved to FromSpace rather than counting elements past end, since
+	  these might be multiple pages.
+
+Fri Jul 11 01:29:55 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (bytesPerPage): dependent on sizeof(Word)
+
+Thu Jul 10 09:15:56 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (tableFraction): size of pageHeap items is sizeof(CmmHeap**)
+	* cmm.cpp (basePointer): use 1L in shift operations
+	* cmm.h (WORD_INDEX, BIT_INDEX): use Word instead of unsigned
+	* cmm.h (SET_OBJECTMAP, CLEAR_OBJECTMAP, MARK): use 1L
+
+Thu May 15 08:24:54 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (collect): fixed bug when scavenge() allocates objects
+	 in page already scanned by the collector.  This happens when
+	 current page contains a pointer to a large object, whose page gets
+	 promoted and added to the queue. When this page is scanned, the
+	 objects it contains are moved to the current page, which however
+	 has been already scanned.
+
+Wed Apr 16 23:09:22 1997  Giuseppe Attardi  <attardi@omega>
+
+	* memory.cpp: added CmmSVR4DataStart()
+
+	* machine.h: use CmmSVR4DataStart for SysV
+
+Fri Mar 28 19:45:24 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (collect): revised to use roots.begin() and roots.get()
+	to scan registered roots.
+	Bartlett version was buggy, since it did not check that an entry
+	had proper values for .addr and .bytes. They are not set to 0 on linux.
+
+	    for (int i = 0; i < rootsCount; i++)
+	      {
+	    	fp = roots[i].addr;
+		for (int j = roots[i].bytes; j > 0; j = j - bytesPerWord)
+		  promotePage((GCP)*fp++);
+	      }
+
+	* cmm.h (Set): revised (count -> last)
+
+	* cmm.cpp (RootAreas): revised to make it similar to Set above
+	(added begin() and get()). It also clears the new array.
+
+
+Mon Mar 24 21:34:38 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (Set): added initialization for entries and test before
+	delete in insert()
+
+Mon Mar 10 18:12:02 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h: added declaration for registerRootArea and unregisterRootArea
+
+Thu Mar  6 20:28:35 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (expandHeap): fixed for Linux ELF
+	 Sometimes malloc() allocates small blocks at quite distant addresses
+	 from large blocks. In this case tablePages would be huge,
+	 to encompass the gap between the blocks.
+	 Therefore we don't recycle them.
+
+Wed Feb 26 11:35:32 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (scavenge): optimization to avoid traversal of object
+	in page being scanned must compare with scanPtr, rather then loc,
+	since traverse may be called recursively from another page.
+
+	* cmm.h (DefaultHeap): added scanPtr
+	scanning -> scanPage
+
+Tue Feb 25 16:10:12 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (collect): loop which restores scanned pages to STABLESPACE
+	should not stop at lastStable.
+	Suggestion by Christian Heckler <chh@plato.uni-paderborn.de>
+
+Thu Feb 20 12:49:20 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (scavenge): avoid recursive traversal for objects which
+	are later in the page being scanned.
+
+	* cmm.h (DefaultHeap): added member scanning.
+
+Wed Feb 19 20:30:42 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (CmmHeap): opaque turned into protected
+
+Mon Jan 20 16:44:58 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (UncollectedHeap): added constructor to make heap opaque
+
+Mon Jan 13 12:32:57 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (visit): isMarked -> marked
+
+Thu Jan  9 09:04:37 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp: eliminated useless CmmObject::new[] and CmmObject::delete[]
+
+	* test5.cpp: eliminated unused references to tempheap
+
+	* cmm.cpp (CmmObject::new[]): revised to use CmmArray
+
+Tue Jan  7 10:43:54 1997  Giuseppe Attardi  <attardi@omega>
+
+	* msw.cpp (mswSelect): added to select M&S heap from C
+
+	* testmsw1.c, testmsw1.c: eliminated mswInit()
+
+Sat Jan  4 11:53:41 1997  Giuseppe Attardi  <attardi@omega>
+
+	* Makefile.d: removed
+
+	* Makefile.dist: renamed to Makefile
+
+Fri Jan  3 12:10:45 1997  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (RootArea): fixed typedef syntax
+
+Sun Dec 22 10:05:24 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (Set): added template class Set.
+
+	* doc/CMMguide.tex (subsection{Array of CmmObject's}):
+	revised to describe new implementation
+
+	* tempheap.h (RootSet): used template class Set for dealing with
+	sets of roots.
+	Class RootSet now contains two members:
+	  Set<CmmObject>  roots;
+	  Set<CmmObject*> rootsLoc;
+
+	* cmm.cpp: changed gcRoots() and gcUnroots() to
+	registerRootArea() and unregisterRootArea(), which use the classes
+	RootArea and RootAreas
+
+	* tempheap.cpp (RootSet): renamed
+	set -> insert
+	setp -> insert
+	unset -> erase
+	unsetp -> erase
+
+	* cmm.h (CmmHeap): added reservedPages. Requires recompiling
+	all applications
+
+	* msw.cpp (MarkAndSweep): constructor replaces mswInit()
+
+	* cmm.cpp (allocatePages): updates reservedPages
+
+	* cmm.h (_CmmInit): eliminated  ~_CmmInit()
+
+	* cmm.cpp (collect): restore scanned pages up to scan != lastStable
+
+	* machine.h: renamed type page -> Page
+
+Wed Dec 18 17:07:57 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (CmmInit): heap rounding requires cast to (Word) for
+        usage with mmap.
+
+Wed Dec 18 12:02:09 1996  Pietro Iglio  <iglio@di.unipi.it>
+
+	* cmm.cpp (emptyStableSpace): check for empty queue
+	* test7.cpp (class Item): added public to CmmObject
+
+Sun Dec 15 20:04:45 1996  Giuseppe Attardi  <attardi@omega>
+
+	* msw.cpp (mswAlloc, mswAllocOpaque): added casts:
+	*(Byte *)(freeList-1) = TransparentMask;
+	*(Byte *)(ret-2) = OpaqueMask
+
+	* machine.h: changed basic types:
+	typedef char *		Ptr;
+	typedef Ptr *		GCP;
+
+	* msw.cpp: added various fixes by Iglio
+
+Sun Dec  8 13:57:08 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp (promotePage): added test OUTSIDE_HEAPS before MARK.
+	Was causing failure in test4 with new MSW initialization.
+
+	* cmm.h: revised mechanism for CmmArray.
+	Arrays of CmmObject's can be created and used with the standard
+	syntax provided	one overloads new[] for the class used for elements.
+	Solution is dependent on GCC.
+	test7 now works
+
+	* test7.cpp (test): revised to use new mechanism.
+
+Tue Dec  3 19:31:53 1996  Giuseppe Attardi  <attardi@omega>
+
+	* README: added Win32 port
+
 Mon Dec  2 09:20:32 1996  Giuseppe Attardi  <attardi@omega>
 
 	* machine.h: 

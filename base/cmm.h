@@ -132,11 +132,26 @@
 
    Arrays of collected objects
    ---------------------------
-   Garbage collected arrays of garbage collected objects can be created
-   by using class CmmArray.
-   Such arrays must be always used through references, e.g.:
-
-	CmmArray<MyClass> & MyVector = * new (100) CmmArray<MyClass>;
+   Class CmmArray can be used to create arrays of CmmObject's as follows.
+   To create an array of objects of class Item, overload the new() operator
+   for class Item:
+  
+  	void*
+  	Item::operator new[](size_t size)
+  	{
+  	  return sizeof(size_t) + (char*)new(size) CmmArray<Item>;
+  	}
+  
+   Then you can create arrays of Item normally, for instance:
+  
+  	Item* anArrayOfItems = new Item[20];
+  
+   The constructor for class Item with no argument will be called for
+   each Item in the array.
+   Such arrays can be used normally, e.g.:
+  
+  	anArrayOfItems[i].print();
+  	Item anItem = anArrayOfItems[3];
 
    Caveats
    -------
@@ -154,7 +169,7 @@
    Pointers to garbage collected objects MAY NOT be stored in dynamically
    allocated objects that are not garbage collected, UNLESS one has specified
    the CMM_HEAPROOTS flag in a Cmm declaration, OR declared that region as
-   a root via a call to gcRoots.
+   a root via a call to registerRootArea().
 
    Pointers to garbage collected objects contained in garbage collected objects
    MUST always point outside the garbage collected heap or to a garbage
@@ -355,8 +370,8 @@ extern bool  isTraced(void *);
  *
  *---------------------------------------------------------------------------*/
 
-extern void  gcRoots(void *area, int bytes);
-extern void  gcUnroots(void *addr);
+extern void  registerRootArea(void *area, int bytes);
+extern void  unregisterRootArea(void *addr);
 
 /* Verbosity levels:							*/
 const	CMM_STATS    =   1;	/* Log garbage collector info		*/
@@ -380,26 +395,25 @@ const	CMM_TSTOBJ   =   2;	/* Extensively test objects		*/
 #define HEADER_SIZE	1	/* header size in words */
 
 #if HEADER_SIZE
-#define MAKE_TAG(index) ((index) << 21 | 1)
-#define MAKE_HEADER(words, tag) ((tag) | (words) << 1)
+# define MAKE_TAG(index) ((index) << 21 | 1)
+# define MAKE_HEADER(words, tag) (Ptr)((Word)(tag) | (words) << 1)
 
-#define HEADER_TAG(header) ((header) >> 21 & 0x7FF)
-#define HEADER_WORDS(header) ((header) >> 1 & 0xFFFFF) // includes HEADER_SIZE
-#define maxHeaderWords 0xFFFFF		/* 1048575 = 4,194,300 bytes */
-#define FORWARDED(header) (((header) & 1) == 0)
+# define HEADER_TAG(header) ((Word)(header) >> 21 & 0x7FF)
+# define HEADER_WORDS(header) ((Word)(header) >> 1 & 0xFFFFF) // includes HEADER_SIZE
+# define maxHeaderWords 0xFFFFF		/* 1048575 = 4,194,300 bytes */
+# define FORWARDED(header) (((Word)(header) & 1) == 0)
 #else
 /* an object is forwarded if it is marked as live and contained in FromSpace */
-#define FORWARDED(gcp) ((MARKED(gcp) && inFromSpace(GCPtoPage(gcp))))
-#define MAKE_HEADER(words, tag)
+# define FORWARDED(gcp) ((MARKED(gcp) && inFromSpace(GCPtoPage(gcp))))
 #endif
 
 #if HEADER_SIZE
-#define ALLOC_SETUP(object, words) \
+# define ALLOC_SETUP(object, words) \
   *object = MAKE_HEADER(words, MAKE_TAG(2)); \
   object += HEADER_SIZE; \
   SET_OBJECTMAP(object)
 #else
-#define ALLOC_SETUP(object, words) \
+# define ALLOC_SETUP(object, words) \
   SET_OBJECTMAP(object)
 #endif
 
@@ -410,31 +424,30 @@ const	CMM_TSTOBJ   =   2;	/* Extensively test objects		*/
  * object and an offset.
  */
 
-extern page	firstHeapPage;	/* Page # of first heap page		*/
-extern page	lastHeapPage;	/* Page # of last heap page		*/
-extern page	firstFreePage;	/* First possible free page		*/
-extern unsigned long *objectMap; /* Bitmap of 1st words of user objects	*/
+extern Page	firstHeapPage;	/* Page # of first heap page		*/
+extern Page	lastHeapPage;	/* Page # of last heap page		*/
+extern Page	firstFreePage;	/* First possible free page		*/
+extern Word *objectMap; /* Bitmap of 1st words of user objects	*/
 #if !HEADER_SIZE || defined(MARKING)
-extern unsigned long *liveMap;	/* Bitmap of objects reached during GC	*/
+extern Word *liveMap;	/* Bitmap of objects reached during GC	*/
 #endif
 extern short *pageSpace;	/* Space number for each page		*/
 extern short *pageGroup;	/* Size of group of pages		*/
-extern page  *pageLink;		/* Page link for each page		*/
+extern Page  *pageLink;		/* Page link for each page		*/
 extern CmmHeap **pageHeap;	/* Heap to which each page belongs	*/
 extern int   tablePages;	/* # of pages used by tables		*/
-extern page  firstTablePage;	/* index of first page used by table	*/
 extern int   freePages;		/* # of pages not yet allocated		*/
 
 
-#define WORD_INDEX(p)	(((unsigned)(p)) / (bitsPerWord * bytesPerWord))
-#define BIT_INDEX(p)	((((unsigned)(p)) / bytesPerWord) & (bitsPerWord - 1))
+#define WORD_INDEX(p)	(((Word)(p)) / (bitsPerWord * bytesPerWord))
+#define BIT_INDEX(p)	((((Word)(p)) / bytesPerWord) & (bitsPerWord - 1))
 
 #define IS_OBJECT(p)	   (objectMap[WORD_INDEX(p)] >> BIT_INDEX(p) & 1)
-#define SET_OBJECTMAP(p)   (objectMap[WORD_INDEX(p)] |= 1 << BIT_INDEX(p))
-#define CLEAR_OBJECTMAP(p) objectMap[WORD_INDEX(p)] &= ~(1 << BIT_INDEX(p))
+#define SET_OBJECTMAP(p)   (objectMap[WORD_INDEX(p)] |= 1L << BIT_INDEX(p))
+#define CLEAR_OBJECTMAP(p) objectMap[WORD_INDEX(p)] &= ~(1L << BIT_INDEX(p))
 
 #define MARKED(p)	(liveMap[WORD_INDEX(p)] >> BIT_INDEX(p) & 1)
-#define MARK(p)		(liveMap[WORD_INDEX(p)] |= 1 << BIT_INDEX(p))
+#define MARK(p)		(liveMap[WORD_INDEX(p)] |= 1L << BIT_INDEX(p))
 
 
 /*---------------------------------------------------------------------------*
@@ -453,16 +466,16 @@ extern int   freePages;		/* # of pages not yet allocated		*/
 #ifdef CMM_PAGE_SIZE
 #  define bytesPerPage CMM_PAGE_SIZE
 #else
-#  define bytesPerPage 512
+#  define bytesPerPage (128*sizeof(Word))
 #endif
 #define wordsPerPage (bytesPerPage / bytesPerWord)
-#define bytesPerWord (sizeof(long))
+#define bytesPerWord (sizeof(Word))
 #define	bitsPerWord  (8*bytesPerWord)
 
 /* Page number <--> pointer conversion */
 
-#define pageToGCP(p) ((GCP)(((unsigned long)p)*bytesPerPage))
-#define GCPtoPage(p) (((unsigned long)p)/bytesPerPage)
+#define pageToGCP(p) ((GCP)(((Word)p)*bytesPerPage))
+#define GCPtoPage(p) (((Word)p)/bytesPerPage)
 
 /* The following define is used to compute the number of words needed for
  * an object.
@@ -541,7 +554,7 @@ class Cmm
   static CmmHeap *heap;
   static CmmHeap *theMSHeap;
   static char*  version;
-  static int verbose;
+  static int  verbose;
   static int  minHeap;		/* # of bytes of initial heap	*/
   static int  maxHeap;		/* # of bytes of the final heap */
   static int  incHeap;		/* # of bytes of each increment */
@@ -565,12 +578,15 @@ class CmmHeap
 
   CmmHeap()
     {
+      reservedPages = 0;
       opaque = false;
     }
 
-  virtual GCP   alloc(unsigned long) = 0;
+  static void init();
+
+  virtual GCP   alloc(Word) = 0;
   virtual void  reclaim(GCP) {};
-  virtual void  scanRoots (int) {};
+  virtual void  scanRoots(int) {};
 
   virtual void collect()
     {
@@ -581,7 +597,7 @@ class CmmHeap
 
   inline bool inside(GCP ptr)
     {
-      page page = GCPtoPage(ptr); /* Page number */
+      Page page = GCPtoPage(ptr); // Page number
       return (page >= firstHeapPage && page <= lastHeapPage
 	      && pageHeap[page] == this);
     }
@@ -589,13 +605,13 @@ class CmmHeap
   inline void visit(CmmObject *); // defined later, after CmmObject
 
   inline bool isOpaque() { return opaque; }
-  inline void setOpaque(bool opacity)
-    { opaque = opacity; }
+  inline void setOpaque(bool opacity) { opaque = opacity; }
 
- private:
-  bool opaque;			/* controls whether collectors for other heaps
-				 * should traverse this heap
-				 */
+  int reservedPages;		// pages reserved for this heap
+
+ protected:
+  bool opaque;			// controls whether collectors for other heaps
+				// should traverse this heap
 };
 
 
@@ -609,14 +625,16 @@ class UncollectedHeap: public CmmHeap
 {
 public:
 
-  GCP alloc(unsigned long size) { return (GCP)malloc(size); }
+  UncollectedHeap()
+    {
+      opaque = true;
+    }
+
+  GCP alloc(Word size) { return (GCP)malloc(size); }
 
   void reclaim(GCP ptr) { free(ptr); }
-  void scanRoots	(page page);
+  void scanRoots	(Page page);
 };
-
-
-CmmObject *basePointer(GCP);
 
 
 /*---------------------------------------------------------------------------*
@@ -630,18 +648,27 @@ class DefaultHeap: public CmmHeap
 public:
 
   DefaultHeap();
-  GCP alloc(unsigned long);
+  GCP alloc(Word);
   void reclaim(GCP) {}		// Bartlett's delete does nothing.
   void collect();		// the default garbarge collector
   void scavenge(CmmObject **ptr);
   GCP  getPages(int);
 
   int usedPages;		// pages in actual use
-  int reservedPages;		// pages reserved for this heap
   int stablePages;		// # of pages in the stable set
-  page firstUnusedPage;		// where to start looking for unused pages
-  page firstReservedPage;	// first page used by this Heap
-  page lastReservedPage;		// last page used by this Heap
+  Page firstUnusedPage;		// where to start looking for unused pages
+  Page firstReservedPage;	// first page used by this Heap
+  Page lastReservedPage;	// last page used by this Heap
+
+private:
+  void DefaultHeap::promotionPhase();
+  void DefaultHeap::compactionPhase();
+  static GCP move(GCP);
+
+#ifndef NO_SCAN_OPT
+  Page scanPage;		// page being scanned
+  GCP scanPtr;			// point reached in scanning scanPage
+#endif
 };
 
 /*---------------------------------------------------------------------------*
@@ -655,36 +682,30 @@ class MarkAndSweep : public CmmHeap
 
  public:
 
-  inline GCP 		alloc	(unsigned long size)
+  MarkAndSweep();
+  inline GCP 		alloc	(Word size)
   					       { return (GCP) mswAlloc(size); }
   inline void 		reclaim	(GCP p)        { mswFree(p); }
   inline void 		collect	()	       { mswCollect(); }
-  inline void*		realloc (void * p, unsigned long size)
+  inline void*		realloc (void * p, Word size)
                               { return mswRealloc(p, size); }
-  inline void*		calloc  (unsigned long n, unsigned long size)
+  inline void*		calloc  (Word n, Word size)
   			      { return mswCalloc(n, size); }
 
   inline void		checkHeap()		{ mswCheckHeap(1); }
   inline void		showInfo()		{ mswShowInfo(); }
 
-  MarkAndSweep()
-    {
-      mswInit();
-    }
-
   void			tempHeapStart ()	{ mswTempHeapStart(); }
   void			tempHeapEnd   ()	{ mswTempHeapEnd(); }
   void			tempHeapFree  ()	{ mswTempHeapFree(); }
-  void			tempHeapRegisterRoot (void* ptr)
-  					{ mswRegisterRoot(ptr); }
 
-  void			scanRoots(page page);
+  void			scanRoots(Page page);
 
 };
 
 /*---------------------------------------------------------------------------*
  *
- * -- CmmObjects
+ * -- CmmObject
  *
  *---------------------------------------------------------------------------*/
 
@@ -709,7 +730,7 @@ public:
 #ifdef MARKING
   inline void mark() { MARK(this); }
 
-  inline bool isMarked() { return (MARKED(this)); }
+  inline bool marked() { return (MARKED(this)); }
 #endif
 
   inline int forwarded()
@@ -726,7 +747,7 @@ public:
 #if !HEADER_SIZE
       MARK(this);
 #endif
-      ((GCP)this)[-HEADER_SIZE] = (int)ptr;
+      ((GCP)this)[-HEADER_SIZE] = (Ptr)ptr;
     }
   inline CmmObject *getForward()
     {
@@ -735,18 +756,26 @@ public:
   inline CmmObject *next() {return (CmmObject *)(((GCP)this) + words()); }
 
   void* operator new(size_t, CmmHeap* = Cmm::heap);
-  void operator delete(void *);
+  void operator delete(void*);
 
 #ifndef _WIN32
-  void* operator new[](size_t size, CmmHeap *heap = Cmm::heap);
-  void  operator delete[](void* obj);
+  void* operator new[](size_t size, CmmHeap* = Cmm::heap);
+  void  operator delete[](void*);
 #endif
 };
+
+/*---------------------------------------------------------------------------*
+ *
+ * -- CmmVarObject
+ *
+ * Collectable objects of variable size.
+ *
+ *---------------------------------------------------------------------------*/
 
 class CmmVarObject: public CmmObject
 {
 public:
-  void* operator new(size_t, size_t = (size_t)0, CmmHeap* = Cmm::heap);
+  void* operator new(size_t, size_t = 0, CmmHeap* = Cmm::heap);
 };
 
 /*---------------------------------------------------------------------------*
@@ -755,48 +784,19 @@ public:
  *
  *---------------------------------------------------------------------------*/
 
-// Class CmmArray must be used to create arrays of CmmObject's as follows:
-//
-//       CmmArray<MyClass> & MyVector = * new (100) CmmArray<MyClass> ;
-//
-// Then you can use the [] operator to get CmmObjects as usual.
-// Ex:
-//       MyVector[i]->print();
-// or:
-//       MyClass mc = MyVector[3];
-//
-
 template <class T>
 class CmmArray : public CmmObject
 {
 public:
 
-  void * operator new(size_t s1, size_t s2 = 0, CmmHeap* hz = Cmm::heap)
+  void* operator new(size_t s1, size_t s2, CmmHeap* heap = Cmm::heap)
     {
-      // tito: allocate just s2-1, because the other one
-      // is already in s1=sizeof(CmmArray<T>)
-      size_t size = s1 + sizeof(T) * (s2-1);
-      void* res = new (size, hz) CmmVarObject;
-
-      // clear the array so that if collect is called during the execution of
-      // this function, traverse will skip empty elements
-      bzero((char*) &(((CmmArray<T> *)res)->ptr[0]), s2*sizeof(T));
-
-      T* array = (T*)&(((CmmArray<T> *)res)->ptr[0]);
-      // tito: array[0] should be already initialized by the compiler:
-      // start from i=1.
-      for (size_t i = 1; i < s2; i++)
-	{
-	  size_t preserve = (size_t)&(((CmmArray<T> *)res)->ptr[i]);
-	  ::new (&(((CmmArray<T> *)res)->ptr[i])) T;
-	}
-      return res;
+      return heap->alloc(s2);
     }
 
   ~CmmArray()
     {
       size_t i;
-      unsigned int count = ((size() - sizeof(CmmArray)) / sizeof(T)) + 1;
       for (i = 1; i < count; ++i)
 	ptr[i].~T();
     }
@@ -805,23 +805,25 @@ public:
 
   void traverse()
     {
-      unsigned int count = ((size() - sizeof(CmmArray)) / sizeof(T)) + 1;
-      for (unsigned int i = 0; i < count; i++)
-	if (((int*)ptr)[i])
-	  ptr[i].traverse();
+      for (size_t i = 0; i < count; i++)
+	ptr[i].traverse();
     }
 
 private:
-  T ptr[1];
+  size_t count;			// the __GNUC__ initializes it after new[]
+#ifdef ARRAY_PADDING
+  size_t padding;
+#endif
+  T ptr[0];			// avoid call to T constructor
 };
 
 /*---------------------------------------------------------------------------*/
 
 inline void CmmHeap::
-visit(CmmObject *ptr)
+visit(CmmObject* ptr)
 {
 #ifdef MARKING
-  if (!ptr->isMarked())
+  if (!ptr->marked())
     {
       ptr->mark();
       ptr->traverse();
@@ -830,6 +832,9 @@ visit(CmmObject *ptr)
   ptr->traverse();
 #endif
 }
+
+CmmObject *basePointer(GCP);
+
 
 /*---------------------------------------------------------------------------*
  *
@@ -854,7 +859,6 @@ public:
 	Cmm::heap = Cmm::theDefaultHeap;
       }
     }
-  ~_CmmInit() {};		// destroy _DummyCmmInit after loading cmm.h
 };
 
 /*---------------------------------------------------------------------------*
@@ -865,4 +869,96 @@ public:
 #define GcVarObject	CmmVarObject
 #define GcArray		CmmArray
 
+
+/*---------------------------------------------------------------------------*
+ *
+ * -- Set
+ *
+ *---------------------------------------------------------------------------*/
+
+template <class T>
+class Set
+{
+ public:
+  Set()
+    {
+      last = 0;
+      max = 0;
+      freed = 0;
+      entries = NULL;
+    }
+
+  void insert(T* entry)
+    {
+#     define	    setIncrement 10
+      int i;
+
+      if (freed)
+	{
+	  for (i = 0; i < last; i++)
+	    if (entries[i] == NULL)
+	      {
+		freed--;
+		break;
+	      }
+	}
+      else
+	{
+	  if (last == max)
+	    {
+	      T** np;
+	      max += setIncrement;
+	      np = ::new T*[max];
+	      for (i = 0; i < last; i++)
+		np[i] = entries[i];
+	      // clear the rest
+	      for (; i < max; i++)
+		np[i] = NULL;
+	      if (entries) ::delete entries;
+	      entries = np;
+	    }
+	  i = last++;
+	}
+      entries[i] = entry;
+    }
+
+  void erase(T* entry)
+    {
+      int i;
+
+      for (i = 0; i < last; i++)
+	if (entries[i] == entry)
+	  {
+	    entries[i] = NULL;
+	    freed++;
+	    return;
+	  }
+      assert(i < last);
+    }
+
+  T* get()
+    {
+      // look for a non empty entry
+      while (iter < last)
+	{
+	  if (entries[iter])
+	    return entries[iter++];
+	  else
+	    iter++;
+	}
+      // No more entries;
+      return (T*)NULL;
+    }
+
+  void begin() { iter = 0; }
+
+ protected:
+  T**  entries;
+  
+ private:
+  int  last;
+  int  max;
+  int  freed;
+  int  iter;
+};
 #endif				// _CMM_H

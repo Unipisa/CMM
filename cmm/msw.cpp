@@ -72,6 +72,36 @@
  *
  *---------------------------------------------------------------------------*/
 
+/*---------------------------------------------------------------------------*
+
+  MSW handles small and large objects differently.  A small object is an
+  object whose size is less than 256 bytes.
+
+  MSW gets pages from allocatePages(). Each page is marked as either
+  SINGLE, when used for small objects, or GROUPED.
+
+  Each SINGLE page contains only objects of the same exact word size.
+  Each page contains a free list linking all free objects within that page.
+
+  During the sweep phase any non marked object is released:
+  in the case of a small object, it is added to the free list of the page;
+  otherwise the corresponding set of {\em grouped} pages is added to the set of
+  available pages.
+  Non marked pages can be immediately released without scanning them.
+
+  Each object has a header which contains a bitmask (telling whether the
+  object is allocated, free or marked) and a pointer to the next free object in
+  the same page.
+  the header is before the object, therefore, when cerating a page of fixed
+  objects of size S, MSW allocates S+OBJ_ALIGNMENT bytes per object.
+
+  Adding OBJ_ALIGNMENT ensures that the next object is properly aligned.
+  [Since a rounding of S is done entering mswAlloc, one could instead add
+   PtrSize before rounding S and avoid adding OBJ_ALIGNEMENT. Beppe ]
+
+ *---------------------------------------------------------------------------*/
+
+
 #include "cmm.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -92,15 +122,15 @@
  * :: Debug Stuff
  *---------------------------------------------------------------------------*/
 
-static unsigned long	markedBytes = 0;
-static unsigned long	sweptBytes  = 0;
+static size_t	markedBytes = 0;
+static size_t	sweptBytes  = 0;
 
-static unsigned 	totFreeFPages = 0;
-static unsigned long	totFreeFixedMem = 0;
+static size_t 	totFreeFPages = 0;
+static size_t	totFreeFixedMem = 0;
 
-static unsigned long	allocSerial   = 0;
-static unsigned long	freeSerial    = 0;
-static unsigned long	collectSerial = 0;
+static size_t	allocSerial   = 0;
+static size_t	freeSerial    = 0;
+static size_t	collectSerial = 0;
 
 #define gcOut	stderr
 
@@ -126,7 +156,7 @@ static unsigned long	collectSerial = 0;
 
      /* NOTE: `allocSerial', etc. can be confused with a root  */
 #    if defined(MSW_SERIAL_DEBUG)
-        static unsigned long	allocSerialBreak = 0;
+        static size_t	allocSerialBreak = 0;
 #    	define mswSerialDEBUG(STMT) 	STMT
 #    else
 #	define mswSerialDEBUG(STMT)
@@ -156,8 +186,8 @@ static unsigned long	collectSerial = 0;
 #    if defined(MSW_GET_ALLOC_SIZE_STATS)
 
 #	define MAX_TRACED_SIZE			4000
-        static unsigned long totAllocatedSizes [MAX_TRACED_SIZE];
-        static unsigned long totHugeAllocated = 0;
+        static size_t totAllocatedSizes[MAX_TRACED_SIZE];
+        static size_t totHugeAllocated = 0;
 
 #	define mswGetStatsDEBUG(size) \
 		if ((size) < MAX_TRACED_SIZE) \
@@ -192,8 +222,8 @@ static unsigned long	collectSerial = 0;
 #define AllocMask		0x1
 #define MarkMask		0x3
 #define FreeMask		0x0
-#define OpaqueMask		0xaa
-#define TransparentMask		0xbb
+#define OpaqueMask		((Byte)0xaa)
+#define TransparentMask		((Byte)0xbb)
 
 /* Page type: values for the page map */
 
@@ -220,8 +250,8 @@ static unsigned long	collectSerial = 0;
  * If there is an attempt of using a free memory object, it should be easy to
  * understand if the mem obj has been released during a collection.
  */
-#define EMPTY_MEM_TAG		0xee
-#define RELEASED_MEM_TAG	0xdd
+#define EMPTY_MEM_TAG		((Byte)0xee)
+#define RELEASED_MEM_TAG	((Byte)0xdd)
 
 #define PAGE_START(ptr)		(Ptr)((Word)(ptr) & ~(bytesPerPage - 1))
 
@@ -343,13 +373,13 @@ struct MarkStackFrameStruct {
 #define  MarkStackFramePages       8
 
 #define MarkStackPush(OBJ)   \
-     { *(Ptr*)markStackTop = (Ptr) (OBJ);         \
+     { *(Ptr*)markStackTop = (Ptr) (OBJ);        \
 	 markStackTop += PtrSize;                \
 	   if (markStackTop == markStackHeadroom)  mswExpandMarkStack(); }
 
-#define MarkStackPop(VAR)                              \
-     { if (markStackTop == markStackBase) {            \
-         theMarkStack = theMarkStack->previous;        \
+#define MarkStackPop(VAR)                        \
+     { if (markStackTop == markStackBase) {      \
+         theMarkStack = theMarkStack->previous;  \
          markStackHeadroom = (Ptr) theMarkStack + MarkStackFramePages * bytesPerPage;   \
 	 markStackTop = markStackHeadroom - PtrSize; \
 	 markStackBase = (Ptr) theMarkStack + sizeof(MarkStackFrameStruct); \
@@ -431,7 +461,7 @@ extern  int	end;	/* Compiler defined, end of data segment */
 
 
 static PageHeader     mswAllocFPage	       (Word size);
-static Ptr  	      mswAllocChunk	       (unsigned long, unsigned);
+static Ptr  	      mswAllocChunk	       (size_t, unsigned);
 static Ptr  	      mswAllocPages	       (int nPages, Word size);
 
 static Ptr            mswGetPages	       (int nPages, Word size);
@@ -471,7 +501,7 @@ mswSelect()
 
 
 void *
-mswAlloc(unsigned long size)
+mswAlloc(size_t size)
 {
         Ptr    	   freeList;
         PageHeader freePage;
@@ -489,9 +519,7 @@ mswAlloc(unsigned long size)
 #	endif
 
 	assert(size);
-
 	size = ROUND_UP(size, PtrSize);
-
 	mswGetStatsDEBUG(size);
 
 	if (size >= MaxFixedSize)
@@ -505,10 +533,9 @@ mswAlloc(unsigned long size)
 	assert(freePage->objSize == size);
 
 	freeList = freePage->freeList;
-
 	freePage->allocatedObjs += 1;
 	*freeList = AllocMask;
-	*(Byte *)(freeList-1) = TransparentMask;
+	*(freeList-1) = TransparentMask;
 
 	// Following assignment is needed because subsequent call to
 	// mswAllocFPage might release completely "freePage".
@@ -535,16 +562,16 @@ mswAlloc(unsigned long size)
  * :: mswAllocOpaque
  *
  * Allocates an object that is guaranteed to do not contain pointers.
- * Usefull only for big chunks, that are not traversed during the collection.
+ * Useful only for big chunks, that are not traversed during the collection.
  *
  *---------------------------------------------------------------------------*/
 
 void *
-mswAllocOpaque(unsigned long size)
+mswAllocOpaque(size_t size)
 {
 	if (size < MaxFixedSize) {
 	  Ptr ret = (Ptr)mswAlloc(size);
-	  *(Byte *)(ret-2) = OpaqueMask;
+	  *(ret-2) = OpaqueMask;
 	  return ret;
 	}
 	else
@@ -618,7 +645,7 @@ mswShouldExpandHeap(void)
  * Since more than requested pages can be allocated, the remaining chunk is
  * added to freeChunks.
  * NOTE: the pageMap is updated only for extra chunks.
- * NOTE that when mswGetPages is called no chunk of "nPages" size is
+ * NOTE: when mswGetPages is called no chunk of "nPages" size is
  *   currently available.
  * NOTE: a NULL value is returned only if no memory is available.
  *
@@ -724,7 +751,7 @@ mswSetupFPage(Ptr page, Word size)
 
 	for (p = firstObj; p <= lastObj; p += size1) {
 	  *p = 0;		/* mark and alloc info */
-	  SET_NEXT_FREE_OBJ(p, p + size1);   /* Next free list item */
+	  SET_NEXT_FREE_OBJ(p, p + size1); /* Next free list item */
 	  mswTagMemDEBUG({
 	    Ptr pd;
 	    for (pd = p + 1 + sizeof(Ptr); pd < p + 1 + size; pd++)
@@ -861,7 +888,7 @@ mswFree(void * p)
  * are allocated.
  *---------------------------------------------------------------------------*/
 
-unsigned long
+size_t
 mswGetObjSize(void * ptr)
 {
 	int 	   pageInfo = PAGE_INFO(ptr);
@@ -880,7 +907,7 @@ mswGetObjSize(void * ptr)
  *
  *---------------------------------------------------------------------------*/
 
-static unsigned long
+static size_t
 mswGetRealObjSize(void * ptr)
 {
 	int 	   pageInfo = PAGE_INFO(ptr);
@@ -891,7 +918,7 @@ mswGetRealObjSize(void * ptr)
 	if (pageInfo == PAGE_Fixed)
 		return page->objSize;
 	else
-		return (page->nPages * bytesPerPage) - FirstObjOffset -1;
+		return (page->nPages * bytesPerPage) - FirstObjOffset +1;
 }
 
 /*---------------------------------------------------------------------------*
@@ -902,11 +929,11 @@ mswGetRealObjSize(void * ptr)
  *---------------------------------------------------------------------------*/
 
 void *
-mswRealloc(void * p, unsigned long size)
+mswRealloc(void * p, size_t size)
 {
-	unsigned long realSize = mswGetRealObjSize(p);
-	Ptr	      newPtr;
-	PageHeader    page;
+	size_t	    realSize = mswGetRealObjSize(p);
+	Ptr	    newPtr;
+	PageHeader  page;
 
 	if (realSize >= size) {
 		/* Size of mixed objects must be updated because during
@@ -921,15 +948,26 @@ mswRealloc(void * p, unsigned long size)
 	else {
 		newPtr = (Ptr)mswAlloc(size);
 		/* If obj is opaque, then keep it opaque */
-		if (size < MaxFixedSize)
-			*(newPtr-2) = *((Ptr)p-2);
+
+                Byte isOpaque;
+
+                if (realSize < MaxFixedSize)
+                  isOpaque = (*((Byte *)p-2) == OpaqueMask);
+                else {
+		  PageHeader oldHead = (PageHeader)ROUND_DOWN(p, bytesPerPage);
+                  isOpaque = (Byte)oldHead->isOpaque;
+                }
+
+		if (size < MaxFixedSize) {
+			if (isOpaque)
+                          *(newPtr-2) = OpaqueMask;
+                }
 		else {
-		  PageHeader newHead = (PageHeader) ROUND_DOWN(newPtr,
-							       bytesPerPage);
-		  PageHeader oldHead = (PageHeader) ROUND_DOWN(p,
-							       bytesPerPage);
-		  newHead->isOpaque = oldHead->isOpaque;
+		  PageHeader newHead = (PageHeader)ROUND_DOWN(newPtr,
+							      bytesPerPage);
+		  newHead->isOpaque = isOpaque;
 		}
+
 		memcpy(newPtr, p, realSize);
 		mswFree(p);
 		return newPtr;
@@ -944,7 +982,7 @@ mswRealloc(void * p, unsigned long size)
  *---------------------------------------------------------------------------*/
 
 void *
-mswCalloc(unsigned long n, unsigned long size)
+mswCalloc(size_t n, size_t size)
 {
 	void * mem = mswAlloc(n * size);
 
@@ -1098,7 +1136,7 @@ mswAddToFreeChunks(Ptr ptr, int nPages)
 		pPrev = &(chunks->nextChunkGroup);
 		chunks = chunks->nextChunkGroup;
 	}
-	/* This point is reached iif this is the maximum chunk.
+	/* This point is reached if this is the maximum chunk.
 	 * Add the chunk to the tail of the list.
 	 */
 	*pPrev = chunk;
@@ -1282,7 +1320,7 @@ mswMergeChunkWithNeighbors(Ptr chunk, int* pNPages)
  *---------------------------------------------------------------------------*/
 
 static Ptr
-mswAllocChunk(unsigned long size, unsigned type)
+mswAllocChunk(size_t size, unsigned type)
 {
 	int	nPages = (FirstObjOffset + size + bytesPerPage)
 	                    / bytesPerPage;
@@ -1406,6 +1444,8 @@ mswFreeChunk(PageHeader header)
 
 static void		mswMarkFromTo(GCP from, GCP to);
 static void		mswExpandMarkStack(void);
+static void		mswMarkRegisteredRoots(void);
+extern RootAreas	roots;	// areas registered as containing roots
 extern char **		environ;
 
 static void
@@ -1440,6 +1480,16 @@ mswMark(void)
 	mswMarkFromTo((GCP)stackStart, (GCP)stackEnd);
 	mswGcDEBUG(fprintf(gcOut, " (%lu marked from stack)", markedBytes););
 	CmmExamineStaticAreas(mswMarkFromTo);
+	mswMarkRegisteredRoots();
+}
+
+static void
+mswMarkRegisteredRoots()
+{
+     roots.begin();
+     RootArea* ra;
+     while (ra = roots.get())
+       mswMarkFromTo((GCP)ra->addr, (GCP)(((Ptr)ra->addr) + ra->bytes));
 }
 
 unsigned maxDepth = 0;
@@ -1466,7 +1516,6 @@ mswMarkFromTo(GCP from, GCP to)
 	  case PAGE_Fixed:
 
 	    header = (PageHeader) PAGE_START(p);
-
 	    bp = GET_OBJ_BASE(p, header);
 
 	    /* Consider only allocated objs not marked. */
@@ -1480,10 +1529,10 @@ mswMarkFromTo(GCP from, GCP to)
 	    header->isMarked = 1;
 
 	    /* If opaque, don't traverse it */
-	    assert(*(bp-1) == OpaqueMask ||
-		   *(bp-1) == TransparentMask);
+	    assert(*((Byte*)bp-1) == OpaqueMask ||
+		   *((Byte*)bp-1) == TransparentMask);
 
-	    if (*(Byte *)(bp-1) == OpaqueMask)
+	    if (*((Byte*)bp-1) == OpaqueMask)
 	      continue;
 
 	    mswMarkFromTo((GCP)(bp+1),
@@ -1521,7 +1570,7 @@ mswMarkFromTo(GCP from, GCP to)
 	  }
 	}
 }
-#elif MSW_BREAD_FIRST
+#elif MSW_BREADTH_FIRST
 
 static void
 mswMarkFromTo(GCP from, GCP to)
@@ -1557,10 +1606,10 @@ mswMarkFromTo(GCP from, GCP to)
       header->isMarked = 1;
 		
       /* If opaque, don't traverse it */
-      assert(*(bp-1) == OpaqueMask ||
-	     *(bp-1) == TransparentMask);
+      assert(*((Byte*)bp-1) == OpaqueMask ||
+	     *((Byte*)bp-1) == TransparentMask);
 		
-      if (*(Byte *)(bp-1) == OpaqueMask)
+      if (*((Byte*)bp-1) == OpaqueMask)
 	continue;
 		
       MarkStackPush((GCP)(bp+1));
@@ -1641,10 +1690,10 @@ mswMarkFromTo(GCP from, GCP to)
       header->isMarked = 1;
 
       /* If opaque, don't traverse it */
-      assert(*(bp-1) == OpaqueMask ||
-	     *(bp-1) == TransparentMask);
+      assert(*((Byte*)bp-1) == OpaqueMask ||
+	     *((Byte*)bp-1) == TransparentMask);
 
-      if (*(Byte *)(bp-1) == OpaqueMask)
+      if (*((Byte*)bp-1) == OpaqueMask)
 	continue;
 
       MarkStackPush(pt+1);
@@ -1719,15 +1768,15 @@ mswExpandMarkStack()
     theMarkStack->next = newFrame;
     newFrame->previous = theMarkStack;
     newFrame->next = NULL;
-    mswPageMapSet((Ptr) newFrame, MarkStackFramePages, PAGE_Other);
+    mswPageMapSet((Ptr)newFrame, MarkStackFramePages, PAGE_Other);
   }
   else
     newFrame = theMarkStack->next;
 
   theMarkStack = newFrame;
 
-  markStackTop = (Ptr) theMarkStack + sizeof(MarkStackFrameStruct);
-  markStackHeadroom = (Ptr) theMarkStack + MarkStackFramePages  * bytesPerPage;
+  markStackTop = (Ptr)theMarkStack + sizeof(MarkStackFrameStruct);
+  markStackHeadroom = (Ptr)theMarkStack + MarkStackFramePages * bytesPerPage;
   markStackBase = markStackTop;
 }
 
@@ -1970,7 +2019,6 @@ mswCollect()
 
 MarkAndSweep::MarkAndSweep()
 {
-	extern  void	CmmInit(void);
 	int 	i, j, k;
 	Word	firstObjOff, bp = 0;
 	Word	lastObjOff;
@@ -1988,8 +2036,7 @@ MarkAndSweep::MarkAndSweep()
 	 * same size.
 	 */
 	for (i = PtrSize; i < MaxFixedSize; i += PtrSize) {
-	  firstObjOff = (Word) PTR_ALIGN(sizeof(PageHeaderStruct)+1,
-					 OBJ_ALIGNMENT) -1;
+	  firstObjOff = FirstObjOffset;
 	  FPagesInfo[i].firstObjOffset = firstObjOff;
 	  FPagesInfo[i].basePointerv = (Ptr *)
 	    malloc(sizeof(Ptr) * bytesPerPage);
@@ -2039,7 +2086,7 @@ MarkAndSweep::MarkAndSweep()
 	    (lastObjOff - firstObjOff) / size1;
 	}
 
-	CmmInit();
+	CmmHeap::init();
 	heapStart = (Ptr)pageToGCP(firstHeapPage);
 	heapEnd   = heapStart;
 
@@ -2061,7 +2108,7 @@ MarkAndSweep::MarkAndSweep()
 
 /*---------------------------------------------------------------------------*
  *
- * -- MarkAndSweep::scanRoots(int page)
+ * -- MarkAndSweep::scanRoots(Page page)
  *
  * Promotes pages referred by any allocated object inside "page".
  * (Should be) Used by DefaultHeap to identify pointers from MarkAndSweep
@@ -2084,7 +2131,7 @@ MarkAndSweep::scanRoots(Page page)
 	  int 	size = header->objSize;
 	  Word	size1 = size + OBJ_ALIGNMENT;
 	  Ptr	obj;
-	  long*	ptr;
+	  GCP	ptr;
 	  Ptr	lo = (Ptr)header + FPagesInfo[size].firstObjOffset;
 	  Ptr	hi = GET_LAST_OBJ_PTR(header, size);
 	
@@ -2092,19 +2139,19 @@ MarkAndSweep::scanRoots(Page page)
 	    if (*obj != AllocMask)
 	      continue;		// <----
 
-	    for (ptr = (long*) obj + 1 + sizeof(Ptr);
-		 ptr < (long*) obj + 1 + size; ptr++)
+	    for (ptr = (GCP) obj + 1 + sizeof(Ptr);
+		 ptr < (GCP) obj + 1 + size; ptr++)
 	      promotePage((GCP)ptr);
 	  }
 	} else if (pageInfo == PAGE_Mixed) {
-	  long*	ptr;
-	  long* end;
+	  GCP	ptr;
+	  GCP end;
 	
 	  if (header->isOpaque) return; // <----
 	
-	  end = (long*) FirstObjOffset + 1 + header->objSize;
+	  end = (GCP) FirstObjOffset + 1 + header->objSize;
 	
-	  for (ptr = (long*) FirstObjOffset + 1; ptr < end; ptr++)
+	  for (ptr = (GCP) FirstObjOffset + 1; ptr < end; ptr++)
 	    promotePage((GCP)ptr);
 	}
 }
@@ -2282,7 +2329,7 @@ mswShowInfo(void)
 	mswDEBUG(fprintf(gcOut, "+++ Debug version +++\n"););
 	fprintf(gcOut, "Alignment = %d\n", OBJ_ALIGNMENT);
 	fprintf(gcOut, "Max heap size = %lu Kbytes\n",
-		(unsigned long) (heapEnd - heapStart) / 1024);
+		(size_t)(heapEnd - heapStart) / 1024);
 	fprintf(gcOut, "Page size = %lu\n", bytesPerPage);
 
 	mswShowTIME({
@@ -2557,8 +2604,8 @@ mswCheckFreeFixedList(PageHeader page, int size)
 
 	  mswTagMemDEBUG({
 	    for (p = start; p < freeList + 1 + size; p++)
-	      assert(*p == EMPTY_MEM_TAG ||
-		     *p == RELEASED_MEM_TAG);
+	      assert(*(Byte*)p == EMPTY_MEM_TAG ||
+		     *(Byte*)p == RELEASED_MEM_TAG);
 	  });
 	
 	  freeList = NEXT_FREE_OBJ(freeList);
@@ -2602,8 +2649,8 @@ mswCheckFPage(Ptr page)
 	firstObjOff = FPagesInfo[size].firstObjOffset;
 
 	for (p = page + firstObjOff; p <= hi; p += size1) {
-	  assert(*(Byte *)(p-1) == TransparentMask
-		 || *(Byte *)(p-1) == OpaqueMask);
+	  assert(*(Byte*)(p-1) == TransparentMask
+		 || *(Byte*)(p-1) == OpaqueMask);
 	  assert(*p == AllocMask || *p == FreeMask);
 	  if (*p == AllocMask)
 	    allocatedObjs += 1;
@@ -2723,8 +2770,8 @@ mswCheckFreeChunks()
 	
 	    mswTagMemDEBUG({
 	      for (p = (Ptr)l1+sizeof(FreePageHeaderStruct)+1; p < (Ptr)l1 + (l1->nPages * bytesPerPage); p++)
-		assert(*p == RELEASED_MEM_TAG ||
-		       *p == EMPTY_MEM_TAG);
+		assert(*(Byte*)p == RELEASED_MEM_TAG ||
+		       *(Byte*)p == EMPTY_MEM_TAG);
 	    });
 	
 	    l1 = l1->nextChunk;
@@ -2837,14 +2884,14 @@ getPtrInfo(Ptr p)
 		    "WARNING: STATE is not MarkMask | AllocMask | FreeMask! \n");
 	    break;
 	  }
-	  switch (*(base-1)) {
+	  switch (*(Byte*)(base-1)) {
 	  case OpaqueMask:
 	    fprintf(gcOut, "Obj is OPAQUE \n"); break;
 	  case TransparentMask:
 	    fprintf(gcOut, "Obj is TRANSPARENT \n"); break;
 	  default:
 	    fprintf(gcOut,
-		    "WARNING: not registred as OPAQUE or TRANSPARENT! \n");
+		    "WARNING: not registered as OPAQUE or TRANSPARENT!\n");
 	    break;
 	  }
 	  break;

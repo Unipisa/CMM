@@ -1,10 +1,10 @@
 /*---------------------------------------------------------------------------*
  *
- *  msw.h:	memory manager with mark&sweep garbage collection.
+ *  msw.h:	mark&sweep garbage collector for CMM.
  *
  *  date:	6 March 1995
  *  authors:	Pietro Iglio
- *  email:	cmm@di.unipi.it, iglio@posso.dm.unipi.it
+ *  email:	cmm@di.unipi.it, iglio@di.unipi.it
  *  address:	Dipartimento di Informatica
  *		Corso Italia 40
  *		I-56125 Pisa, Italy
@@ -55,7 +55,7 @@ extern void *		mswCalloc		(unsigned long, unsigned long);
 extern void		mswCollect		(void);
 extern void		mswCollectNow		(void);
 
-extern void		mswInit			(void);
+extern void		mswSelect		(void);
 extern void		mswShowInfo		(void);
 
 extern void		mswCheckHeap		(int verbose);

@@ -14,7 +14,7 @@ HFILES = machine.h cmm.h
 
 OBJS = 	cmm.o tempheap.o msw.o memory.o
 
-TESTS = test2 test3 test4 test5 test6 test7 testmsw1 testmsw2 testmsw3
+TESTS = test2 test3 test4 test5 test6 test7 test8 testmsw1 testmsw2 testmsw3
 
 all: libCmm.a
 
@@ -62,6 +62,9 @@ test6:	test6.cpp libCmm.a
 
 test7:	test7.cpp libCmm.a
 	${CPP} -o test7 ${CFLAGS} test7.cpp libCmm.a 
+
+test8:	test8.cpp libCmm.a
+	${CPP} -o test8 ${CFLAGS} test8.cpp libCmm.a 
 
 testmsw1: testmsw1.c libCmm.a
 	${CPP} -g -o testmsw1 ${CFLAGS} testmsw1.c libCmm.a

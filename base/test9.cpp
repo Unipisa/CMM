@@ -13,6 +13,8 @@
  *
  */
 
+extern "C" long random();
+
 // For this values it works
 //const int length1=10;
 //const int length2=15;
@@ -30,6 +32,7 @@ const int numberoflistallocs=2;
    "counter" number of longs. Counter is determined randomly
    for each object.
 */
+
 
 class TestClass: public CmmVarObject
 {
@@ -116,7 +119,7 @@ void createlist1(Classptr p)
   localpointer=p;
   localpointer->set(0);
 
-  counter= rand() & 700;
+  counter=(random()&700);
   newpointer = new(counter*sizeof(long)+2*sizeof(TestClass*)) TestClass;
   newpointer->counter=counter;
 
@@ -130,7 +133,7 @@ void createlist1(Classptr p)
     localpointer->setp2(NULL);
     localpointer->setp1(NULL);
 
-    counter=(rand()&700);
+    counter=(random()&700);
     newpointer = new(counter*sizeof(long)+2*sizeof(TestClass*)) TestClass;
     newpointer->counter=counter;
 
@@ -155,7 +158,7 @@ void createlist2(Classptr p)
 
   localpointer->set(0);
 
-  counter=(rand()&700);
+  counter=(random()&700);
   //cout << counter << " ";
   newpointer = new(counter*sizeof(long)+2*sizeof(TestClass*)) TestClass;
   newpointer->counter=counter;
@@ -170,7 +173,7 @@ void createlist2(Classptr p)
     localpointer->setp1(NULL);
     localpointer->setp2(NULL);
 
-    counter=(rand()&700);
+    counter=(random()&700);
     newpointer = new(counter*sizeof(long)+2*sizeof(TestClass*)) TestClass;
     newpointer->counter=counter;
 
@@ -185,8 +188,7 @@ void createlist2(Classptr p)
 
 
 /* Test if list 1 is still correct */
-void
-testlist1(Classptr p)
+int testlist1(Classptr p)
 {
   for (long i=0; i<length1; i++)
   {
@@ -200,8 +202,7 @@ testlist1(Classptr p)
 }
 
 /* Test if list 2 is still correct */
-void
-testlist2(Classptr p)
+int testlist2(Classptr p)
 {
   for (long i=0; i<length2; i++)
   {
@@ -218,12 +219,12 @@ testlist2(Classptr p)
 main()
 {
   Classptr p0=NULL;
-  int i;
+  int i, j, k;
   long count;
 
   cout << "Process 0 is initializing the base pointer of the two lists!\n";
 
-  count=(rand()&700);
+  count=(random()&700);
   p0 = new(count*sizeof(long)+2*sizeof(TestClass*)) TestClass;
   p0->setp1(NULL);
   p0->setp2(NULL);

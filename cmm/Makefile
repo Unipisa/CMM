@@ -32,14 +32,15 @@
 #        ones succeeded and which failed.
 #  "clean"  removes all object code from this directory.
 
-CFLAGS	= -O2
+CFLAGS	= -O
 CC	= g++
 
 HFILES = machine.h cmm.h
 
 OBJS = 	cmm.o tempheap.o msw.o memory.o
 
-TESTS = test2 test3 test4 test5 test6 test7 test8 testmsw1 testmsw2 testmsw3
+TESTS = test1 test2 test3 test4 test5 test6 test7 test8 test9 \
+	testmsw1 testmsw2 testmsw3
 
 all: libCmm.a
 
@@ -47,15 +48,14 @@ debug:
 	make CFLAGS="-UNDEBUG -g" all
 
 test : ${TESTS}
-	 @for i in ${TESTS}; do  \
-	   ( echo "Running " ./$$i "..."; \
-	     ./$$i >tests.out 2>&1 ;  \
-	   )                    \
+	@echo > tests.out
+	@for t in ${TESTS}; do  \
+	   echo "Running " $$t "..." >> tests.out ; \
+	   ./$$t >> tests.out 2>&1 ;  \
 	done
 
 libCmm.a: $(OBJS)
-	ar ru libCmm.a $(OBJS)
-	ranlib libCmm.a
+	ar cr libCmm.a $(OBJS)
 
 cmm.o: cmm.cpp $(HFILES)
 	$(CC) $(CFLAGS) -c cmm.cpp
@@ -69,6 +69,8 @@ tempheap.o: tempheap.cpp tempheap.h $(HFILES)
 msw.o: msw.cpp msw.h $(HFILES)
 	$(CC) $(CFLAGS) -c msw.cpp
 
+test1:	test1.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test1 test1.cpp libCmm.a
 test2:	test2.cpp libCmm.a
 	$(CC) $(CFLAGS) -o test2 test2.cpp libCmm.a
 test3:	test3.cpp libCmm.a
@@ -83,6 +85,8 @@ test7:	test7.cpp libCmm.a
 	$(CC) $(CFLAGS) -o test7 test7.cpp libCmm.a 
 test8:	test8.cpp libCmm.a
 	$(CC) $(CFLAGS) -o test8 test8.cpp libCmm.a 
+test9:	test9.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test9 test9.cpp libCmm.a 
 testmsw1: testmsw1.c libCmm.a
 	$(CC) $(CFLAGS) -g -o testmsw1 testmsw1.c libCmm.a
 testmsw2: testmsw2.c libCmm.a
@@ -90,4 +94,4 @@ testmsw2: testmsw2.c libCmm.a
 testmsw3: testmsw3.cpp libCmm.a
 	$(CC) $(CFLAGS) -o testmsw3 testmsw3.cpp libCmm.a
 clean:
-	/bin/rm -rf *.o $(TESTS) libCmm.a
+	/bin/rm -rf *.o libCmm.a $(TESTS) tests.out

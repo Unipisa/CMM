@@ -239,12 +239,30 @@ CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
     (*ExamineArea)((GCP)base, (GCP)limit);
 }
 
+#elif defined(macintosh)
+
+#include <Memory.h>
+
+void *
+getGlobalHeapEnd()
+{
+	/* PCB:  this is an upper limit. */
+	THz applicationHeap = ApplicationZone();
+	return (void*)applicationHeap->bkLim;		/* PCB:  end of the application heap is as far as it goes. */
+}
+
+void CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
+{
+	extern char __data_start__[], __data_end__[];
+	(*ExamineArea)((GCP)&__data_start__, (GCP)&__data_end__);
+}
+
 #else
 
 void *
 getGlobalHeapEnd()
 {
-	return sbrk(0);
+  return sbrk(0);
 }
 
 void

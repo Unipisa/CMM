@@ -31,7 +31,6 @@
 #  "test"  compiles and runs all tests (listed in TESTS) reporting which
 #        ones succeeded and which failed.
 #  "clean"  removes all object code from this directory.
-#  "demo1", "demo2" etc. run various demonstration programs.
 
 CFLAGS	= -O2
 CC	= g++
@@ -40,7 +39,7 @@ HFILES = machine.h cmm.h
 
 OBJS = 	cmm.o tempheap.o msw.o memory.o
 
-TESTS = test2 test3 test4 test5 test6 test7 testmsw1 testmsw2 testmsw3
+TESTS = test2 test3 test4 test5 test6 test7 test8 testmsw1 testmsw2 testmsw3
 
 all: libCmm.a
 
@@ -48,9 +47,10 @@ debug:
 	make CFLAGS="-UNDEBUG -g" all
 
 test : ${TESTS}
-	 @for i in ${TESTS}; do  \
+	@echo > tests.out
+	@for i in ${TESTS}; do  \
 	   ( echo "Running " ./$$i "..."; \
-	     ./$$i >tests.out 2>&1 ;  \
+	     ./$$i >> tests.out 2>&1 ;  \
 	   )                    \
 	done
 
@@ -82,6 +82,8 @@ test6:	test6.cpp libCmm.a
 	$(CC) $(CFLAGS) -o test6 test6.cpp libCmm.a 
 test7:	test7.cpp libCmm.a
 	$(CC) $(CFLAGS) -o test7 test7.cpp libCmm.a 
+test8:	test8.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test8 test8.cpp libCmm.a 
 testmsw1: testmsw1.c libCmm.a
 	$(CC) $(CFLAGS) -g -o testmsw1 testmsw1.c libCmm.a
 testmsw2: testmsw2.c libCmm.a

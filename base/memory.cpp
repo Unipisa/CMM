@@ -244,7 +244,7 @@ CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
 void *
 getGlobalHeapEnd()
 {
-	return sbrk(0);
+  return sbrk(0);
 }
 
 void
@@ -277,3 +277,25 @@ CmmSetStackBottom(Word bottom)
 #	endif
 #endif
 }
+
+/*---------------------------------------------------------------------------*
+ * -- Data Start
+ *---------------------------------------------------------------------------*/
+
+#ifdef __svr4__
+
+char *
+CmmSVR4DataStart(int max_page_size)
+{
+  Word text_end = ((Word)(&etext) + sizeof(Word) - 1) & ~(sizeof(Word) - 1);
+  /* etext rounded to word boundary	*/
+  Word next_page = (text_end + (Word)max_page_size - 1)
+    & ~((Word)max_page_size - 1);
+  Word page_offset = (text_end & ((Word)max_page_size - 1));
+  char * result = (char *)(next_page + page_offset);
+  /* Note that this isn't equivalent to just adding
+   * max_page_size to &etext if &etext is at a page boundary
+   */
+  return(result);
+}
+#endif

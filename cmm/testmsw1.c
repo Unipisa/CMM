@@ -246,8 +246,7 @@ dummyList(int len)
 	List l0 = l;
 
 	for (i = 0; i < len; i++)
-	       push((Ptr) i, l);
-
+	  push((Ptr) i, l);
 	cdr(l0) = l; 	/* make a circular list */
 
 	return l;
@@ -261,7 +260,7 @@ foo()
 	int i;
 
 	for (i = 0; i < maxListSize; i++)
-		push(dummyList(i), l);
+	  push(dummyList(i), l);
 
 	l1 = l;
 	i  = 0;
@@ -269,12 +268,12 @@ foo()
 	mswCheckHeap(1);
 
 	while (l1)
-		l1 = cdr(l1);
+	  l1 = cdr(l1);
 
 	l1 = listReverse(l);
 	l1 = listNReverse(l1);
 	while (l1)
-		l1 = cdr(l1);
+	  l1 = cdr(l1);
 }
 
 char *
@@ -284,7 +283,7 @@ strFromInt(int v)
 	char * ret;
 	int  n;
 
-#if defined(__sparc)
+#if defined(__sparc) && !defined(__svr4__)
 	n = strlen(sprintf(buf, "%d", v));
 #else
 	n = sprintf(buf, "%d", v);
@@ -311,12 +310,8 @@ test()
 
 	/* treePrint(tree); */
 	printf("Tree size: %d nodes.\n", treeCount(tree));
-
-	printf("\n\n");
-
 	tree = treeNewInt(10);
 }
-
 
 void
 main(int argc, char ** argv)
@@ -329,9 +324,9 @@ main(int argc, char ** argv)
 	if (argc >= 3)
 	      maxIter = atoi(argv[2]);
 
-	printf("\nGarbage Collection Mark&Sweep Heap \n\n");
-	printf("\n+++++ Using maxListSize = %d \n\n", maxListSize);
-	printf("\n+++++ Using maxIter = %d \n\n", maxIter);
+	printf("Garbage Collection Mark&Sweep Heap\n");
+	printf("+++++ Using maxListSize = %d\n", maxListSize);
+	printf("+++++ Using maxIter = %d\n", maxIter);
 
 	test();
 	mswShowInfo();

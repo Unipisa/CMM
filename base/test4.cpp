@@ -70,20 +70,25 @@ main()
 	int i;
 
 	for  (i = 1; i <= 7000; i++)  {
-	   b1 = new big_cell;
-	   l1 = new little_cell;
-	   b2 = new big_cell;
-	   l2 = new little_cell;
-	   b1->car = b2;
-	   b1->cdr = bl;
-	   b1->value = b2->value = i;
-	   bl = b1;
-	   l1->car = l2;
-	   l1->cdr = ll;
-	   l1->value = l2->value = i;
-	   ll = l1;
+	  if  (i % 700 == 0)
+	    { printf("."); fflush(stdout); }
+	  b1 = new big_cell;
+	  l1 = new little_cell;
+	  b2 = new big_cell;
+	  l2 = new little_cell;
+	  b1->car = b2;
+	  b1->cdr = bl;
+	  b1->value = b2->value = i;
+	  bl = b1;
+	  l1->car = l2;
+	  l1->cdr = ll;
+	  l1->value = l2->value = i;
+	  ll = l1;
 	}
+	printf("\n");
 	for  (i = 7000; i >= 1; i--)  {
+	  if  (i % 700 == 0)
+	    { printf("."); fflush(stdout); }
 	   if  (bl->value != i  ||  ll->value != i)  {
 	      fprintf(stderr, "Inconsistent list\n");
 	      abort();
@@ -91,5 +96,5 @@ main()
 	   bl = bl->cdr;
 	   ll = ll->cdr;
 	}
-	exit(0);
+	printf("\n");
 }
