@@ -4,7 +4,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "tempheap.h"
+#include "cmm.h"
+
+#define	VECT_SIZE	1000
 
 struct  cell : CmmObject 
 {
@@ -37,20 +39,13 @@ struct vector : CmmObject
   vector  *car;
   vector  *cdr;
   int  value1;
-  char bytes[1000];
+  char bytes[VECT_SIZE];
   int  value2;
   vector(vector* x, vector* y, int v1, int v2);
-  void traverse();
 };
 
 typedef  vector* VP;
 
-void vector::traverse()
-{
-  CmmHeap *heap = Cmm::heap;
-  heap->scavenge((CmmObject **)&car);
-  heap->scavenge((CmmObject **)&cdr);
-}
 
 vector::vector(vector* x, vector* y, int v1, int v2)  
 {
@@ -63,7 +58,7 @@ vector::vector(vector* x, vector* y, int v1, int v2)
 /* Test program */
 
 int  init_global = 2,
-array_global[1000];
+array_global[VECT_SIZE];
 
 void  printtree(CP zp)
 {
@@ -92,7 +87,7 @@ void  listtest1()
   
   printf("List test 1\n");
   lp = NULL;
-  for (i = 0; i <= 1000 ; i++)  
+  for (i = 0; i <= VECT_SIZE ; i++)  
     {
       if  (i % 15 != 14)
 	printf("%d ", i);
@@ -131,6 +126,9 @@ void  vectortest()
       zp = lp;
       for (j = i; j >= 0 ; j--)  
 	{
+	  // mswCheckAllocatedObj(zp);
+	  // if (zp->cdr) mswCheckAllocatedObj(zp->cdr);
+	
 	  if ((zp == NULL) || (zp->value1 != j)  ||  (zp->value2 != j))
 	    printf("LP is not a good list when j = %d\n", j);
 	  zp = zp->cdr;
@@ -152,8 +150,10 @@ CP  treetest()
       tp = zp;
     }
   Cmm::heap->collect();
+  mswCheckHeap(1);
   zp = new cell(tp, tp, 6);
   Cmm::heap->collect();
+  mswCheckHeap(1);
   printtree(zp);
   return(zp);
 }
@@ -168,8 +168,11 @@ void  listtest2()
     {
       if  (i % 15 != 14)
 	printf("%d ", i);
-      else
+      else {
 	printf("%d\n", i);
+        /* Cmm::heap->collect(); */
+	 mswCheckHeap(0);
+      }
       /* Build the list */
       lp = NULL;
       for  (j = 0; j < length; j++)  
@@ -181,6 +184,9 @@ void  listtest2()
       zp = lp;
       for (j = length-1; j >= 0 ; j--)  
 	{
+	  // mswCheckAllocatedObj(zp);
+	  // if (zp->cdr) mswCheckAllocatedObj(zp->cdr);
+
 	  if ((zp == NULL) || (zp->value != j))
 	    printf("LP is not a good list when j = %d\n", j);
 	  zp = zp->cdr;
@@ -195,21 +201,29 @@ CP  gp;		/* A global pointer */
 
 main()
 {
-//  Cmm::heap = new TempHeap(10000);
+  Cmm::heap = ::new MarkAndSweep(MSW_Automatic);
   /* List construction test */
+  /* printf("WARNING: skipping listtest1()!\n"); */
   listtest1();
+  mswCheckHeap(1);
 
   /* List of vectors > 1 page */
   vectortest();
+  mswCheckHeap(1);
 
   /* Tree construction test */
   gp = treetest();
+  mswCheckHeap(1);
 
   /* 1000 10000 node lists */
   listtest2();
+  mswCheckHeap(1);
 
   /* Check that tree is still there */
   printtree(gp);
+
+  mswCheckHeap(1);
+  mswShowInfo();
 
   exit(0);
 }

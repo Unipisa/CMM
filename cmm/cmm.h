@@ -10,6 +10,8 @@
  *
  *  Copyright (C) 1993, 1994, 1995 Giuseppe Attardi and Tito Flagella.
  *
+ *  This file is part of the PoSSo Customizable Memory Manager (CMM).
+ *
  * Permission to use, copy, and modify this software and its documentation is
  * hereby granted only under the following terms and conditions.  Both the
  * above copyright notice and this permission notice must appear in all copies
@@ -79,7 +81,7 @@
    Defining garbage collected classes
    ----------------------------------
    Classes allocated in the garbage collected heap are derived from class
-   GcObject.
+   CmmObject.
    The collector applies method traverse() to an object to find other objects
    to which it points.
    A method for traverse() must be supplied by the programmer for each such
@@ -103,7 +105,7 @@
 
    For example,
 
-   class BigNum: public GcObject
+   class BigNum: public CmmObject
    {
      long data;
      BigNum *next;                         // Rule (a) applies here
@@ -144,7 +146,7 @@
    ---------------------
    In order to allocate variable size objects, the size of the variable
    portion of the object must be defined when the object is created.
-   Classes of variable sized objects must derive from class GcVarObject.
+   Classes of variable sized objects must derive from class CmmVarObject.
 
    Arrays of collected objects
    ---------------------------
@@ -204,7 +206,8 @@
 			         <expand size>,
 			         <generational>,
 			         <expand threshold>,
-			         <flags>)
+			         <flags>,
+				 <gcthreshold>)
 
    The arguments are defined as follows:
 
@@ -236,6 +239,8 @@
 			 	   & CMM_DEBUGLOG = log events internal to the
 						  garbage collector
 				 DEFAULT: 0.
+	<gcthreshold>		Heap size before MSW starts GC.
+				DEFAULT: 6000000
 
    When multiple Cmm declarations occur, the one that specifies the largest
    <maximum heap size> value will control all factors except flags which is
@@ -251,6 +256,7 @@
 	CMM_GENERATIONAL <generational>
 	CMM_INCPERCENT	 <expand threshold>
 	CMM_FLAGS	 <flags>
+	CMM_GCTHRESHOLD  <generational>
 
    If any of these variables are supplied, then the actual values used to
    configure the garbage collector are logged on stderr.
@@ -274,10 +280,13 @@ extern "C" {
 #include <stdlib.h>
 #include <stddef.h>
 #include <assert.h>
+#include <memory.h>
 #ifdef  __cplusplus
 }
 #endif
 #include <new.h>
+#undef NDEBUG
+#define NDEBUG
 
 /*---------------------------------------------------------------------------*
  *
@@ -301,11 +310,16 @@ extern "C" {
 class CmmHeap;
 class DefaultHeap;
 class UncollectedHeap;
-class GcObject;
+class CmmObject;
+
+#define GcObject CmmObject	/* back compatibility */
+#define GcVarObject CmmVarObject /* back compatibility */
+#define GcArray CmmArray	/* back compatibility */
 
 typedef long  *GCP;		/* Pointer to a garbage collected object */
 
 extern GCP allocatePages(int, CmmHeap *); /* Page allocator		*/
+extern void promotePage(GCP cp);
 
 /*---------------------------------------------------------------------------*
  * -- isTraced
@@ -384,19 +398,26 @@ const	CMM_DEBUGLOG =  32;	/* Log events internal to collector	*/
 
 #define MARKING
 /*
- * The base address of GcObject's is noted in the objectMap bit map.  This 
+ * The base address of CmmObject's is noted in the objectMap bit map.  This 
  * allows CmmMove() to rapidly detect a derived pointer and convert it into an
  * object and an offset.
  */
 
 extern int  firstHeapPage;	/* Page # of first heap page		*/
 extern int  lastHeapPage;	/* Page # of last heap page		*/
+extern int  firstFreePage;      /* First possible free page		*/
 extern unsigned long *objectMap; /* Bitmap of 1st words of user objects	*/
 #if !HEADER_SIZE || defined(MARKING)
 extern unsigned long *liveMap;	/* Bitmap of objects reached during GC	*/
 #endif
 extern short *pageSpace;	/* Space number for each page		*/
+extern short *pageGroup;	/* Size of group of pages		*/
+extern int   *pageLink;		/* Page link for each page		*/
 extern CmmHeap **pageHeap;	/* Heap to which each page belongs	*/
+extern int   tablePages;	/* # of pages used by tables		*/
+extern int   firstTablePage;	/* index of first page used by table	*/
+extern int   freePages;		/* # of pages not yet allocated		*/
+extern GCP   globalHeapStart;	/* start of global heap			*/
 
 
 #define WORD_INDEX(p)	(((unsigned)(p)) / (bitsPerWord * bytesPerWord))
@@ -442,7 +463,7 @@ extern CmmHeap **pageHeap;	/* Heap to which each page belongs	*/
 #else
 #  define DOUBLE_ALIGN_OPTIMIZE
 #  ifdef DOUBLE_ALIGN_OPTIMIZE
-/* GcObject's smaller than 16 bytes (including vtable) cannot contain
+/* CmmObject's smaller than 16 bytes (including vtable) cannot contain
    doubles (the compiler must add padding between vtable and first float)
 */
 #   define bytesToWords(x) (((x) < 16) ? \
@@ -477,6 +498,17 @@ extern CmmHeap **pageHeap;	/* Heap to which each page belongs	*/
 #else
 #define WHEN_FLAGS(flag, code)
 #endif
+
+/* Default heap configuration */
+
+const int  CMM_MINHEAP      = 131072; /* # of bytes of initial heap	*/
+const int  CMM_MAXHEAP      = 2147483647; /* # of bytes of the final heap */
+const int  CMM_INCHEAP      = 1048576;    /* # of bytes of each increment */
+const int  CMM_GENERATIONAL = 35;	  /* % allocated to force total
+					   collection		       	*/
+const int  CMM_GCTHRESHOLD  = 6000000; /* Heap size before MSW starts GC */
+const int  CMM_INCPERCENT   = 25;     /* % allocated to force expansion */
+const int  CMM_FLAGS        = 0;      /* option flags			*/
 
 /*---------------------------------------------------------------------------*
  *
@@ -490,19 +522,22 @@ class Cmm
   Cmm(int newMinHeap,
       int newMaxHeap,
       int newIncHeap,
-      int newGenerational,
+      int newThreshold,
       int newIncPercent,
-      int newFlags);
+      int newFlags,
+      int newGcThreshold = CMM_GCTHRESHOLD);
 
   static DefaultHeap *theDefaultHeap;
   static UncollectedHeap *theUncollectedHeap;
   static CmmHeap *heap;
+  static CmmHeap *theMSHeap;
   static char*  version;
   static int verbose;
 
-  static int minHeap;		/* # of bytes of initial heap	*/
-  static int maxHeap;		/* # of bytes of the final heap */
-  static int incHeap;		/* # of bytes of each increment */
+  static int  minHeap;		/* # of bytes of initial heap	*/
+  static int  maxHeap;		/* # of bytes of the final heap */
+  static int  incHeap;		/* # of bytes of each increment */
+  static int  gcThreshold;	/* heap size before start gc    */
   static int  generational;	/* % allocated to force total collection */
   static int  incPercent;	/* % allocated to force expansion */
   static int  flags;		/* option flags			*/
@@ -525,15 +560,16 @@ class CmmHeap
       opaque = false;
     }
 
-  virtual GCP alloc(int) = 0;
-  virtual void reclaim(GCP) {};
+  virtual GCP   alloc(unsigned long) = 0;
+  virtual void  reclaim(GCP) {};
+  virtual void  scanRoots (int) {};
 
   virtual void collect()
     {
       fprintf(stderr, "Warning: Garbage Collection on a non collectable heap");
     }
 
-  virtual void scavenge(GcObject **) {};
+  virtual void scavenge(CmmObject **) {};
 
   inline bool inside(GCP ptr)
     {
@@ -542,7 +578,7 @@ class CmmHeap
 	      && pageHeap[page] == this);
     }
 
-  inline void visit(GcObject *); // defined later, after GcObject
+  inline void visit(CmmObject *); // defined later, after CmmObject
 
   inline bool isOpaque() { return opaque; }
   inline void setOpaque(bool opacity)
@@ -565,13 +601,14 @@ class UncollectedHeap: public CmmHeap
 {
 public:
 
-  GCP alloc(int size) { return (GCP)malloc(size); }
+  GCP alloc(unsigned long size) { return (GCP)malloc(size); }
 
   void reclaim(GCP ptr) { free(ptr); }
+  void scanRoots	(int page);
 };
 
 
-GcObject *basePointer(GCP);
+CmmObject *basePointer(GCP);
 
 
 /*---------------------------------------------------------------------------*
@@ -585,10 +622,10 @@ class DefaultHeap: public CmmHeap
 public:
   
   DefaultHeap();
-  GCP alloc(int);
+  GCP alloc(unsigned long);
   void reclaim(GCP) {}		// Bartlett's delete does nothing.
   void collect();		// the default garbarge collector
-  void scavenge(GcObject **ptr);
+  void scavenge(CmmObject **ptr);
   GCP  reservePages(int);
   
   int usedPages;		// pages in actual use
@@ -602,17 +639,17 @@ public:
 
 /*---------------------------------------------------------------------------*
  *
- * -- GcObjects
+ * -- CmmObjects
  *
  *---------------------------------------------------------------------------*/
 
-class GcObject
+class CmmObject
 {
 public:
 
-  virtual void traverse();
+  virtual void traverse() {} ;
 
-  virtual ~GcObject() {} ;
+  virtual ~CmmObject() {} ;
 
   CmmHeap *heap() { return pageHeap[GCPtoPage(this)]; }
 
@@ -639,24 +676,28 @@ public:
       return FORWARDED(((GCP)this));
 #endif
     }
-  inline void SetForward(GcObject *ptr)
+  inline void SetForward(CmmObject *ptr)
     {
 #if !HEADER_SIZE
       MARK(this);
 #endif
       ((GCP)this)[-HEADER_SIZE] = (int)ptr;
     }
-  inline GcObject *GetForward()
+  inline CmmObject *GetForward()
     {
-      return (GcObject *) ((GCP)this)[-HEADER_SIZE];
+      return (CmmObject *) ((GCP)this)[-HEADER_SIZE];
     }
-  inline GcObject *next() {return (GcObject *)(((GCP)this) + words()); }
+  inline CmmObject *next() {return (CmmObject *)(((GCP)this) + words()); }
 
   void* operator new(size_t, CmmHeap* = Cmm::heap);
   void operator delete(void *);
+
+  void* operator new[](size_t size, CmmHeap *heap = Cmm::heap);
+  void  operator delete[](void* obj);
+
 };
 
-class GcVarObject: public GcObject 
+class CmmVarObject: public CmmObject 
 {
 public:
   void* operator new(size_t, size_t = (size_t)0, CmmHeap* = Cmm::heap);
@@ -664,15 +705,15 @@ public:
 
 /*---------------------------------------------------------------------------*
  *
- * -- Arrays of GcObjects
+ * -- Arrays of CmmObjects
  *
  *---------------------------------------------------------------------------*/
 
-// Class GcArray must be used to create arrays of GcObject's as follows:
+// Class CmmArray must be used to create arrays of CmmObject's as follows:
 //
-//       GcArray<MyClass> & MyVector = * new (100) GcArray<MyClass> ;
+//       CmmArray<MyClass> & MyVector = * new (100) CmmArray<MyClass> ;
 //       
-// Then you can use the [] operator to get GcObjects as usual.
+// Then you can use the [] operator to get CmmObjects as usual.
 // Ex:
 //       MyVector[i]->print();
 // or:
@@ -680,36 +721,36 @@ public:
 //
 
 template <class T>
-class GcArray : public GcObject
+class CmmArray : public CmmObject
 {
 public:
 
   void * operator new(size_t s1, size_t s2 = 0, CmmHeap* hz = Cmm::heap)
     {
       // tito: allocate just s2-1, because the other one
-      // is already in s1=sizeof(GcArray<T>)
+      // is already in s1=sizeof(CmmArray<T>)
       size_t size = s1 + sizeof(T) * (s2-1);
-      void* res = new (size, hz) GcVarObject;
+      void* res = new (size, hz) CmmVarObject;
 
       // clear the array so that if collect is called during the execution of
       // this function, traverse will skip empty elements
-      bzero((char*) &(((GcArray<T> *)res)->ptr[0]), s2*sizeof(T));
+      bzero((char*) &(((CmmArray<T> *)res)->ptr[0]), s2*sizeof(T));
 
-      T* array = (T*)&(((GcArray<T> *)res)->ptr[0]);
+      T* array = (T*)&(((CmmArray<T> *)res)->ptr[0]);
       // tito: array[0] should be already initialized by the 
       // compiler. Start from i=1.
       for (size_t i = 1; i < s2; i++)
 	{
-	  size_t pos = &(((GcArray<T> *)res)->ptr[i]);
-	  ::new (&(((GcArray<T> *)res)->ptr[i])) T;
+	  size_t pos = &(((CmmArray<T> *)res)->ptr[i]);
+	  ::new (&(((CmmArray<T> *)res)->ptr[i])) T;
 	}
       return res;
     }
   
-  ~GcArray()
+  ~CmmArray()
     {
       size_t i;
-      unsigned int count = ((size() - sizeof(GcArray)) / sizeof(T)) + 1;
+      unsigned int count = ((size() - sizeof(CmmArray)) / sizeof(T)) + 1;
       for (i = 1; i < count; ++i)
 	ptr[i].~T();
     }
@@ -718,7 +759,7 @@ public:
   
   void traverse()
     {
-      unsigned int count = ((size() - sizeof(GcArray)) / sizeof(T)) + 1;
+      unsigned int count = ((size() - sizeof(CmmArray)) / sizeof(T)) + 1;
       for (int i = 0; i < count; i++)
 	if (ptr[i])
 	  ptr[i].traverse();
@@ -728,7 +769,8 @@ private:
   T ptr[1];
 };
 
-inline void CmmHeap::visit(GcObject *ptr)
+inline void CmmHeap::
+visit(CmmObject *ptr)
 {
 #ifdef MARKING
   if (!ptr->isMarked())
@@ -740,6 +782,50 @@ inline void CmmHeap::visit(GcObject *ptr)
   ptr->traverse();
 #endif
 }
+
+/*---------------------------------------------------------------------------*
+ *
+ * -- MarkAndSweep heap
+ *
+ *---------------------------------------------------------------------------*/
+
+extern "C" {
+#include "msw.h"
+}
+
+class MarkAndSweep : public CmmHeap 
+{
+
+ public:
+
+  inline GCP 		alloc	(unsigned long size)
+  					       { return (GCP) mswAlloc(size); }
+  inline void 		reclaim	(GCP p)        { mswFree(p); }
+  inline void 		collect	()	       { mswCollect(); }
+  inline void 		collectNow()	       { mswCollectNow(); }
+  inline void*		realloc (void * p, unsigned long size)
+                              { return mswRealloc(p, size); }
+  inline void*		calloc  (unsigned long n, unsigned long size)
+  			      { return mswCalloc(n, size); }
+
+  inline void		checkHeap()		{ mswCheckHeap(1); }
+  inline void		showInfo()		{ mswShowInfo(); }
+  
+  MarkAndSweep(unsigned mode = MSW_Automatic)
+    {
+      Cmm::theMSHeap = this;
+      mswInit(mode);
+    }
+
+  void			tempHeapStart ()	{ mswTempHeapStart(); }
+  void			tempHeapEnd   ()	{ mswTempHeapEnd(); }
+  void			tempHeapFree  ()	{ mswTempHeapFree(); }
+  void			tempHeapRegisterRoot (void* ptr)
+  					{ mswRegisterRoot(ptr); }
+
+  void			scanRoots(int page);
+
+};
 
 /*---------------------------------------------------------------------------*
  *
@@ -757,14 +843,19 @@ public:
       if (Cmm::theDefaultHeap == 0) {
 	CmmInitEarly();
 	
-	Cmm::heap = Cmm::theDefaultHeap = new DefaultHeap;
+	Cmm::theDefaultHeap = new DefaultHeap;
+
+#	if defined(PL_CMM_USE_MSW)
+ 		Cmm::heap = ::new MarkAndSweep();
+#	else
+		Cmm::heap = Cmm::theDefaultHeap;
+#	endif
+
 	Cmm::theUncollectedHeap = new UncollectedHeap;
       }
     }
   ~_CmmInit() {};		// destroy _DummyCmmInit after loading cmm.h
 };
-
-static _CmmInit _DummyCmmInit;
 
 #endif				// _CMM_H
 /* DON'T ADD STUFF AFTER THIS #endif */

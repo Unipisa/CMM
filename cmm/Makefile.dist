@@ -1,15 +1,29 @@
+#
+#  Copyright (C) 1993 Tito Flagella.
+#
+#  This file is part of the POSSO Customizable Memory Manager (CMM).
+#
+#  Permission to use, copy, and modify this software and its documentation is
+#  hereby granted only under the following terms and conditions.  Both the
+#  above copyright notice and this permission notice must appear in all copies
+#  of the software, derivative works or modified versions, and any portions
+#  thereof, and both notices must appear in supporting documentation.
 # 
-#   Copyright (C) 1993 Tito Flagella.
-#
-#   This file is part of the POSSO Customizable Memory Manager (CMM).
-#
-#   POSSO CMM is free software; permission is hereby granted to copy this
-#   garbage collector for any purpose, provided the above notices are
-#   retained on all copies.
-#
-#   This code is distributed in the hope that it will be useful,
-#   but WITHOUT ANY WARRANTY; without even the implied warranty of
-#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#  Users of this software agree to the terms and conditions set forth herein,
+#  and agree to license at no charge to all parties under these terms and
+#  conditions any derivative works or modified versions of this software.
+#  
+#  This software may be distributed (but not offered for sale or transferred
+#  for compensation) to third parties, provided such third parties agree to
+#  abide by the terms and conditions of this notice.  
+#  
+#  THE SOFTWARE IS PROVIDED "AS IS" AND THE COPYRIGHT HOLDERS DISCLAIM ALL
+#  WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL THE COPYRIGHT HOLDERS
+#  BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR
+#  ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+#  IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+#  OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 #
 #  USER GUIDE
@@ -19,8 +33,15 @@
 #  "clean"  removes all object code from this directory.
 #  "demo1", "demo2" etc. run various demonstration programs.
 
-OBJS = 	cmm.o HeapStack.o
-TESTS = test2 test3 test4 test5 test6
+CXXFLAGS=-O2
+CC = gcc
+
+HFILES = machine.h cmm.h tempheap.h msw.h
+
+OBJS = 	cmm.o tempheap.o msw.o
+
+
+TESTS = test2 test3 test4 test5 test6 testp2 testp3 testp5
 
 all: libCmm.a
 
@@ -37,28 +58,39 @@ libCmm.a: $(OBJS)
 	ar ru libCmm.a $(OBJS)
 	ranlib libCmm.a
 
-cmm.o: cmm.C cmm.H machine.H
-	$(CXX) $(CXXFLAGS) -c cmm.C
+cmm.o: cmm.cc cmm.h machine.h
+	$(CC) $(CXXFLAGS) -c cmm.cc
 
-HeapStack.o: HeapStack.C cmm.H machine.H HeapStack.H
-	$(CXX) $(CXXFLAGS) -c HeapStack.C
+tempheap.o: tempheap.cc cmm.h machine.h tempheap.h
+	$(CC) $(CXXFLAGS) -c tempheap.cc
 
-test2:	test2.C libCmm.a
-	$(CXX) $(CXXFLAGS) -o test2 test2.C libCmm.a
-test3:	test3.C libCmm.a
-	$(CXX) $(CXXFLAGS) -o test3 test3.C libCmm.a
-test4:	test4.C libCmm.a
-	$(CXX) $(CXXFLAGS) -o test4 test4.C libCmm.a 
-test5:	test5.C libCmm.a
-	$(CXX) $(CXXFLAGS) -o test5 test5.C libCmm.a 
-test6:	test6.C libCmm.a
-	$(CXX) $(CXXFLAGS) -o test6 test6.C libCmm.a 
-test7:	test7.C libCmm.a
-	$(CXX) $(CXXFLAGS) -o test7 test7.C libCmm.a 
-demo1:	demo1.C libCmm.a 
-	$(CXX) $(CXXFLAGS) -o demo1 demo1.C libCmm.a 
-demo2:	demo2.C libCmm.a 
-	$(CXX) $(CXXFLAGS) -o demo2 demo2.C libCmm.a 
+msw.o: msw.cc cmm.h machine.h msw.h
+	$(CC) $(LCXXFLAGS) $(CXXFLAGS) -c msw.cc
+
+test2:	test2.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o test2 test2.cc libCmm.a
+test3:	test3.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o test3 test3.cc libCmm.a
+test4:	test4.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o test4 test4.cc libCmm.a 
+test5:	test5.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o test5 test5.cc libCmm.a 
+test6:	test6.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o test6 test6.cc libCmm.a 
+test7:	test7.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o test7 test7.cc libCmm.a 
+test8:	test8.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o test8 test8.cc libCmm.a 
+testp2: testp2.c libCmm.a
+	${CC} ${CFLAGS} -g -o testp2 testp2.c libCmm.a
+testp3: testp3.c libCmm.a
+	${CC} ${CFLAGS} -g -o testp3 testp3.c libCmm.a
+testp5: testp5.cc libCmm.a
+	${CXX} ${OPTS} -o testp5 ${CXXFLAGS} testp5.cc libCmm.a
+demo1:	demo1.cc libCmm.a
+	$(CC) $(CXXFLAGS) -o demo1 demo1.cc libCmm.a 
+demo2:	demo2.cc libCmm.a 
+	$(CC) $(CXXFLAGS) -o demo2 demo2.cc libCmm.a 
 
 clean:
 	/bin/rm -rf *.o $(TESTS) libCmm.a

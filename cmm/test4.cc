@@ -13,7 +13,7 @@
    page, but two big_cell's can't be.
 */
 
-struct  big_cell : GcObject {
+struct  big_cell : CmmObject {
   big_cell  *car;
   big_cell  *cdr;
   int  value;
@@ -25,8 +25,8 @@ struct  big_cell : GcObject {
 void big_cell::traverse()
 {
   CmmHeap *heap = Cmm::heap;
-  heap->scavenge((GcObject **)&car);
-  heap->scavenge((GcObject **)&cdr);
+  heap->scavenge((CmmObject **)&car);
+  heap->scavenge((CmmObject **)&cdr);
 }
 
 big_cell::big_cell()
@@ -36,7 +36,7 @@ big_cell::big_cell()
 
 typedef  big_cell* bp;
 
-struct  little_cell : GcObject {
+struct  little_cell : CmmObject {
   little_cell  *car;
   little_cell  *cdr;
   int  value;
@@ -48,8 +48,8 @@ struct  little_cell : GcObject {
 void little_cell::traverse()
 {
   CmmHeap *heap = Cmm::heap;
-  heap->scavenge((GcObject **)&car);
-  heap->scavenge((GcObject **)&cdr);
+  heap->scavenge((CmmObject **)&car);
+  heap->scavenge((CmmObject **)&cdr);
 }
 
 little_cell::little_cell()

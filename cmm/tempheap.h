@@ -10,6 +10,8 @@
  *
  *  Copyright (C) 1993, 1994, 1995 Giuseppe Attardi and Tito Flagella.
  *
+ *  This file is part of the PoSSo Customizable Memory Manager (CMM).
+ *
  * Permission to use, copy, and modify this software and its documentation is
  * hereby granted only under the following terms and conditions.  Both the
  * above copyright notice and this permission notice must appear in all copies
@@ -54,7 +56,7 @@
 class Container {
  public:
   GCP alloc(int);
-  GcObject *copy(GcObject *);
+  CmmObject *copy(CmmObject *);
   void reset();
 #if !HEADER_SIZE || defined(MARKING)
   void resetliveMap();
@@ -66,15 +68,15 @@ class Container {
   int usedBytes() { return bytesPerWord*top; }
   int usedWords() { return top; }
 
-  inline GcObject *current() {	// returns the first free word
-    return (GcObject *)(body + top);
+  inline CmmObject *current() {	// returns the first free word
+    return (CmmObject *)(body + top);
   }
 
-  inline GcObject *bottom() {
-    return (GcObject *)(body + BOTTOM + HEADER_SIZE);
+  inline CmmObject *bottom() {
+    return (CmmObject *)(body + BOTTOM + HEADER_SIZE);
   }
 
-  inline bool inside(GcObject *ptr) {
+  inline bool inside(CmmObject *ptr) {
     return (ptr >= bottom() && ptr < current());
   }
 
@@ -99,12 +101,12 @@ private:
   void scanSystemRoots() {};	// Still to define
 
 public:
-  void set(GcObject *);
-  void unset(GcObject *);
-  GcObject *get();
-  void setp(GcObject **);
-  void unsetp(GcObject **);
-  GcObject **getp();
+  void set(CmmObject *);
+  void unset(CmmObject *);
+  CmmObject *get();
+  void setp(CmmObject **);
+  void unsetp(CmmObject **);
+  CmmObject **getp();
   void reset();
 
   void scan(CmmHeap *);
@@ -118,8 +120,8 @@ private:
   int entrypNum;		// = 10;
   int currentp;			// = 0;
 
-  GcObject **entry;
-  GcObject ***entryp;
+  CmmObject **entry;
+  CmmObject ***entryp;
 };
 
 
@@ -136,7 +138,7 @@ class TempHeap : public CmmHeap
 
 public:
 
-  void scavenge(GcObject **);
+  void scavenge(CmmObject **);
   void collect();
   void reset();
   void weakReset();
@@ -165,11 +167,11 @@ private:
   int current;			// = 0;
   Container **chunk;
   
-  GcObject *copy(GcObject *);
+  CmmObject *copy(CmmObject *);
 
-  GCP alloc(int);
+  GCP alloc(unsigned long);
   
-  Container *inside(GcObject *ptr) {
+  Container *inside(CmmObject *ptr) {
     for (int i = 0; i <= current; i++)
       {
 	if (chunk[i]->inside(ptr))

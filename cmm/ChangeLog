@@ -1,3 +1,38 @@
+Thu Nov  2 16:11:11 1995  Pietro Iglio  <iglio@attardi.di.unipi.it>
+
+	* Added CmmObject::operator new[] and CmmObject::operator delete[].
+	  Now CmmArray shouldn't be necessary.
+
+Wed Nov  1 13:53:42 1995  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (Cmm): renamed mswHeap to theMSHeap
+	(GcObject): renamed fo CmmObject
+	(GcVarObject): renamed fo CmmVarObject
+	(GcArray): renamed fo CmmArray
+
+Tue Oct 31 14:00:35 1995  Pietro Iglio  <iglio@attardi>
+        * C++ programs don't need to call mswInit() any more.
+
+Mon Oct 30 19:00:35 1995  Pietro Iglio  <iglio@attardi>
+
+	* Added virtual method "CmmHeap::scanRoots(page)" that promote pages
+	  for each allocated object inside "page". Such method has a
+	  meaningful implementation for MarkAndSweep and UncollectedHeap heaps.
+	* Minor changes/cleanings.
+
+Thu Oct 26 19:37:35 1995  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cc (Cmm): added parameter newGcThreshold
+
+Thu Oct 12 13:06:18 1995  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (bytesPerPageLg): eliminated
+
+	* cmm.cc: default traverse() is again empty:
+	it is not possible to call promotePage during traverse, since
+	all promotions must be done in first phase of collector.
+	Objects in such pages might have been already copied.
+
 Tue Oct  3 11:43:54 1995  Giuseppe Attardi  <attardi@omega>
 
 	* cmm.cc: added default traverse() for GcObject
@@ -514,4 +549,3 @@ Wed Jul 27 21:44:23 1994  Giuseppe Attardi  (attardi@posso)
 
 	* Gr12a/gc/cmm/gcalloc.C (gccollect):
 	  replaced gcregisters with setjmp/longjmp
-

@@ -1,13 +1,13 @@
 #include "heapstack.h"
 #include <iostream.h>
 
-class MyClass : public GcObject 
+class MyClass : public CmmObject 
 {
   int x;
   MyClass *y;
 public:
   void test() { cout << "Testing ... Ok\n" ; }
-  void traverse() { Cmm::heap->scavenge((GcObject **)&y); }
+  void traverse() { Cmm::heap->scavenge((CmmObject **)&y); }
 };
 
 
@@ -21,7 +21,7 @@ main()
   //  Instead of 
   //  .... MyVar = new MyClass[100];
   //  Use ....
-  MyVar = (MyClass *) new (sizeof(MyClass) * 100, MyHeap) GcVarObject ;
+  MyVar = (MyClass *) new (sizeof(MyClass) * 100, MyHeap) CmmVarObject ;
 
   MyVar[2].test();
 

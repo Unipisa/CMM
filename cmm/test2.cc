@@ -10,7 +10,7 @@
 
 /* Cell type to build a list with. */
 
-struct  cell : GcObject  {
+struct  cell : CmmObject  {
   cell  *next;
   int* value1;
   int  value2;
@@ -21,8 +21,8 @@ struct  cell : GcObject  {
 void cell::traverse()
 {
   CmmHeap *heap = Cmm::heap;
-  heap->scavenge((GcObject **)&next);
-  heap->scavenge((GcObject **)&value1);
+  heap->scavenge((CmmObject **)&next);
+  heap->scavenge((CmmObject **)&value1);
 }
 
 cell::cell()
@@ -40,15 +40,16 @@ struct  cella  {
 };
 
 Cmm  dummy(1048576, 2147483647, 1048576, 35, 30,
-	       CMM_HEAPROOTS+CMM_MEM+CMM_STATS);
+	       CMM_HEAPROOTS+CMM_STATS);
 
 main()
 {
 	cella*  pointers = new cella;
 	cellptr  cl = 0, cp;
+	int i;
 
 	/* Allocate 50000 cells referenced by an array in the non-gc heap */
-	for  (int i = 0; i < 50000; i++)  {
+	for  (i = 0; i < 50000; i++)  {
 	   cp = new cell;
 	   pointers->ptr[i] = cp;
 	   cp->value1 = 0;

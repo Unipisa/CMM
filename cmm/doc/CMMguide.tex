@@ -1,14 +1,14 @@
 \documentstyle[11pt,fullpage]{article}
 \def\theenumi{\alph{enumi}}
 \def\labelenumi{(\alph{enumi})}
-\markright{Formal Spec for POSSO Memory Management (15 September 1994)}
+\markright{Formal Spec for POSSO Memory Management}
 \pagestyle{myheadings}
 \begin{document}
 \begin{verbatim}
 POSSO FILE HEADER
 type:     FORMAL SPECIFICATION (C++ library)
 title:    POSSO Customisable Memory Management (CMM)
-date:     15 September 1994
+date:     1 November 1995
 author:   Tito Flagella and Giuseppe Attardi
 email:    tito@di.unipi.it
 address:  Dipartimento di Informatica,
@@ -64,7 +64,7 @@ The CMM user interface provides constructs to specify in which Heap to
 allocate objects.
 
 
-A dynamic class must derived from the class {\tt GcObject} provided by the CMM.
+A dynamic class must derived from the class {\tt CmmObject} provided by the CMM.
 The default collector calls the method {\tt traverse} on dynamic objects to
 identify their internal pointers to other dynamic objects.  Users have to
 provide {\tt traverse} methods for each class whose data members contain
@@ -85,7 +85,7 @@ class objects contained in the class are correctly handled.  The
 following example illustrates these rules, then we explain what the rules are.
 Suppose the following dynamic classes were defined:
 \begin{verbatim}
-class BigNum : public GcObject
+class BigNum : public CmmObject
 {
   long data;
   BigNum *next;                         // Rule (a) applies
@@ -164,7 +164,7 @@ programmer can dynamically decide where to allocate the memory.
 Consider the following example:
 
 \begin{verbatim}
-class Person : public GcObject
+class Person : public CmmObject
 {
 ...
 };
@@ -180,15 +180,15 @@ else obj = new(other) Person(arg);
 
 \subsection{Dynamic Variable Sized Objects}
 
-To support variable sized objects, the class {\tt GcVarObject} is
-available.  This is a derived class from {\tt GcObject}, providing a
+To support variable sized objects, the class {\tt CmmVarObject} is
+available.  This is a derived class from {\tt CmmObject}, providing a
 different operator {\tt new} with an extra parameter for the size of
-the object.  Classes derived from {\tt GcVarObject} are called {\it
+the object.  Classes derived from {\tt CmmVarObject} are called {\it
 dynamic variable sized classes\/}.  The following example illustrates
 their use:
 
 \begin{verbatim}
-class container : public GcVarObject
+class container : public CmmVarObject
 {
   int header;
   int table[1];  // size of this array is determined upon object creation
@@ -219,18 +219,18 @@ Despite these restrictions there are some cases in which the use of such
 classes cannot be avoided. The usual way to achieve this effect in {\tt C++}
 is to allocate dynamically the extra size in the object's constructor, but in
 this way the extra memory allocated would be neither a {\tt C++} object nor
-a {\tt GcObject}.
+a {\tt CmmObject}.
 
-\subsection {Array of GcObjects}
+\subsection {Array of CmmObjects}
 
-The following class can be used to create arrays of GcObjects
+The following class can be used to create arrays of CmmObjects
 like follows:
 
 \begin{verbatim}
        GcArray<MyClass> myVector = * new (100) GcArray<MyClass> ;
 \end{verbatim}
        
-The operator [] can be used to get GcObjects.
+The operator [] can be used to get CmmObjects.
 
 \begin{verbatim}
        myVector[i]->print();
@@ -245,7 +245,7 @@ or:
 \begin{verbatim}
 #include "tempheap.h"
 
-class cell : GcObject          // This class is a GC class
+class cell : CmmObject          // This class is a GC class
 {
   int x;
 
@@ -259,7 +259,7 @@ public:
 
 void cell::traverse()
  { 
-   Cmm::heap->scavenge((GcObject **)&next); 
+   Cmm::heap->scavenge((CmmObject **)&next); 
                                // traverse scavenge the internal pointer
                                // next to reach other cells.
  }
@@ -366,11 +366,11 @@ To support that, the class {\tt CmmHeap} contains an instance of the class
 
 \begin{verbatim}
 
-void set(GcObject *);
-void unset(GcObject *);
+void set(CmmObject *);
+void unset(CmmObject *);
 
-void setp(GcObject **);
-void unsetp(GcObject **);
+void setp(CmmObject **);
+void unsetp(CmmObject **);
 \end{verbatim}
 
 {\tt setp} and {\tt unsetp} are used to (un)register pointers
@@ -390,7 +390,7 @@ main()
   tempheap *myHeap = new TempHeap(10000); 
                                         // Create a new heap
 
-  myHeap->roots.setp((GcObject **)&LocalRoot);  
+  myHeap->roots.setp((CmmObject **)&LocalRoot);  
                                         // Register the pointer as a root
 
   myHeap->roots.set(&GlobalRoot);           
@@ -406,7 +406,7 @@ main()
                                         // traversing from cell LocalRoot
                                         // and GlobalRoot
 
-  myHeap->roots.unsetp((GcObject **)&LocalRoot);
+  myHeap->roots.unsetp((CmmObject **)&LocalRoot);
                                         // Deregister the local root.
 }
 \end{verbatim}

@@ -10,6 +10,8 @@
  *
  *  Copyright (C) 1993, 1994, 1995 Giuseppe Attardi and Tito Flagella.
  *
+ *  This file is part of the PoSSo Customizable Memory Manager (CMM).
+ *
  * Permission to use, copy, and modify this software and its documentation is
  * hereby granted only under the following terms and conditions.  Both the
  * above copyright notice and this permission notice must appear in all copies
@@ -113,8 +115,8 @@ GCP Container::alloc(int bytes)
  *
  *---------------------------------------------------------------------------*/
 
-GcObject *
-Container::copy(GcObject *ptr)
+CmmObject *
+Container::copy(CmmObject *ptr)
 {
   GCP object = body + top;
   register int words = ptr->words();
@@ -132,7 +134,7 @@ Container::copy(GcObject *ptr)
   if ((top & 1) == 0 && top < size)
     *((GCP)(body + top++)) = MAKE_HEADER(1, MAKE_TAG(1));
 #endif
-  return (GcObject *)object;
+  return (CmmObject *)object;
 }
 
 
@@ -153,8 +155,8 @@ RootSet::RootSet()
   // Default to not-conservative
   isConservative = false;
   
-  entry = new GcObject*[entryNum];
-  entryp = new GcObject**[entrypNum];
+  entry = new CmmObject*[entryNum];
+  entryp = new CmmObject**[entrypNum];
   
   for (int i = 0; i < entryNum; i++)
     entry[i] = NULL;
@@ -164,7 +166,7 @@ RootSet::RootSet()
 }
 
 void 
-RootSet::set(GcObject *obj)
+RootSet::set(CmmObject *obj)
      // trivial implementation, but this is not a critical operation
 {
   int i;
@@ -174,7 +176,7 @@ RootSet::set(GcObject *obj)
 	entry[i] = obj;
 	return;
       }
-  GcObject **tmp = new GcObject*[entryNum + entryInc];
+  CmmObject **tmp = new CmmObject*[entryNum + entryInc];
   
   for (i = 0; i < entryNum; i++)
     tmp[i] = entry[i];
@@ -188,7 +190,7 @@ RootSet::set(GcObject *obj)
 }
 
 void 
-RootSet::unset(GcObject *obj)
+RootSet::unset(CmmObject *obj)
 {
   int i;
   for (i = 0; ((i < entryNum) && (entry[i] != obj)); i++);
@@ -196,7 +198,7 @@ RootSet::unset(GcObject *obj)
   entry[i] = NULL;
 }
 
-GcObject *
+CmmObject *
 RootSet::get()
 {
   // look for a not empty entry
@@ -208,11 +210,11 @@ RootSet::get()
 	current++;
     }
   // No more entries;
-  return (GcObject *)NULL;
+  return (CmmObject *)NULL;
 }
 
 void
-RootSet::setp(GcObject **obj)
+RootSet::setp(CmmObject **obj)
      // trivial implementation, but this is not a critical operation
 {
   int i;
@@ -222,7 +224,7 @@ RootSet::setp(GcObject **obj)
 	entryp[i] = obj;
 	return;
       }
-  GcObject ***tmp = new GcObject**[entrypNum + entryInc];
+  CmmObject ***tmp = new CmmObject**[entrypNum + entryInc];
   
   for (i = 0; i < entrypNum; i++)
     tmp[i] = entryp[i];
@@ -236,7 +238,7 @@ RootSet::setp(GcObject **obj)
 }
 
 void
-RootSet::unsetp(GcObject **obj)
+RootSet::unsetp(CmmObject **obj)
 {
   int i;
   for (i = 0; ((i < entrypNum) && (entryp[i] != obj)); i++);
@@ -244,7 +246,7 @@ RootSet::unsetp(GcObject **obj)
   entryp[i] = NULL;
 }
 
-GcObject **
+CmmObject **
 RootSet::getp()
 {
   // look for a not empty entry
@@ -256,7 +258,7 @@ RootSet::getp()
 	currentp++;
     }
   // No more entries;
-  return (GcObject **)NULL;
+  return (CmmObject **)NULL;
 }
 
 void
@@ -270,7 +272,7 @@ void
 RootSet::scan(CmmHeap *heap)
 {
   reset();
-  GcObject *objPtr, **objPtrPtr;
+  CmmObject *objPtr, **objPtrPtr;
   CmmHeap *oldHeap = Cmm::heap;
   Cmm::heap = heap;
   while (objPtr = get()) objPtr->traverse();
@@ -305,7 +307,7 @@ TempHeap::expand()
 }
 
 GCP
-TempHeap::alloc(int bytes)
+TempHeap::alloc(unsigned long bytes)
 { 
   if ((chunk[current]->room()) < bytesToWords(bytes) * bytesPerWord)
     expand();			// expand() modifies current.
@@ -313,8 +315,8 @@ TempHeap::alloc(int bytes)
   return chunk[current]->alloc(bytes);
 }
 
-GcObject *
-TempHeap::copy(GcObject *ptr)
+CmmObject *
+TempHeap::copy(CmmObject *ptr)
 {
   if (chunk[current]->room() < ptr->size())
     expand();
@@ -322,13 +324,13 @@ TempHeap::copy(GcObject *ptr)
 }
 
 void
-TempHeap::scavenge(GcObject **ptr)
+TempHeap::scavenge(CmmObject **ptr)
 {
   GCP pp = (GCP)*ptr;
   if (OUTSIDE_HEAP(GCPtoPage(pp)))
     return;
   
-  GcObject *oldPtr = basePointer(pp);
+  CmmObject *oldPtr = basePointer(pp);
   int offset = (int)pp - (int)oldPtr;
   
   if (!inside(oldPtr))
@@ -350,26 +352,25 @@ TempHeap::scavenge(GcObject **ptr)
 #   else
       (MARKED(oldPtr))
 #   endif
-	*ptr = (GcObject *)((int)oldPtr->GetForward() + offset);
+	*ptr = (CmmObject *)((int)oldPtr->GetForward() + offset);
   else
     {
-      GcObject *newObj = copy(oldPtr);
+      CmmObject *newObj = copy(oldPtr);
       oldPtr->SetForward(newObj);
-      *ptr = (GcObject *)((int)newObj + offset);
+      *ptr = (CmmObject *)((int)newObj + offset);
     }
 }
 
 void
 TempHeap::collect()
 {
-  GcObject *objPtr;
+  CmmObject *objPtr;
   int i;
   
   if (!toCollect && current < chunkNum * 0.8)
     return;
   
-  WHEN_VERBOSE(fprintf(stderr, "TempHeap Collector: C[0-%d] -> ",
-		       current));
+  WHEN_VERBOSE(fprintf(stderr, "TempHeap Collector: C[0-%d] -> ", current));
   
 #if !HEADER_SIZE || defined(MARKING)
   /* Clear the liveMap bitmap */

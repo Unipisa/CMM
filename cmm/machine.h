@@ -38,6 +38,8 @@ extern "C"  void  bzero(void *, int);
 #define STACK_GROWS_DOWNWARD
 #endif
 
+#define MEMALIGN	(char *)memalign
+
 /***********************************************************************/
 /* Architectures requiring double alignement for objects               */
 
@@ -59,9 +61,20 @@ extern "C"  void  bzero(void *, int);
 #elif defined(__svr4__) || defined(DGUX)
     extern int etext;
 #   define DATASTART Svr4DataStart(0x10000)
-#elif defined(__i386) || defined(hp9000s300)
+#elif defined(hp9000s300)
     extern int etext;
 #   define DATASTART ((((unsigned long)(&etext)) + 0xfff) & ~0xfff)
+#elif defined(__i386)
+    extern int etext;
+#   define DATASTART ((((unsigned long)(&etext)) + 0xfff) & ~0xfff)
+
+#   if defined(MSDOS) && defined(GO32)
+#       define STACKBOTTOM (0x80000000)
+#   elif defined(__WIN32__)
+#       define STACKBOTTOM CmmGetStackBase()
+#   else
+#       define STACKBOTTOM (0xc0000000)
+#   endif
 #elif defined(__mips)
 #   include <machine/vmparam.h>
 #   define DATASTART USRDATA

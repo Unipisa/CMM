@@ -16,7 +16,7 @@
 
 /* The basic data structure is a list of blocks.  */
 
-struct  block : GcObject {
+struct  block : CmmObject {
   block*  prev;
   int  number[25000];
   block(block* ptr, int x);
@@ -25,7 +25,7 @@ struct  block : GcObject {
 
 void block::traverse()
 {
-  Cmm::heap->scavenge((GcObject **)&prev);
+  Cmm::heap->scavenge((CmmObject **)&prev);
 }
 
 block::block(block* ptr, int x)
