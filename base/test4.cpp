@@ -62,6 +62,7 @@ typedef  little_cell* lp;
 Cmm dummy(CMM_MINHEAP, CMM_MAXHEAP, CMM_INCHEAP, 50, 45,
 	  CMM_GCTHRESHOLD, CMM_FLAGS, 0);
 
+void
 main()
 {
 	bp  bl = 0, b1, b2;

@@ -39,6 +39,9 @@
 #include <stdio.h>
 #include "machine.h"
 
+void *		globalHeapStart = 0; // start of global heap
+static void *	globalHeapEnd;
+
 /*---------------------------------------------------------------------------*
  * -- MS Windows
  *---------------------------------------------------------------------------*/
@@ -67,22 +70,6 @@
 
 #include <windows.h>
 
-# ifdef __CYGWIN32__
-  /* from Win32API */
-typedef void *PVOID;
-typedef const void *LPCVOID;
-typedef struct _MEMORY_BASIC_INFORMATION { 
-  PVOID BaseAddress;            
-  PVOID AllocationBase;         
-  DWORD AllocationProtect;      
-  DWORD RegionSize;             
-  DWORD State;                  
-  DWORD Protect;                
-  DWORD Type;                   
-} MEMORY_BASIC_INFORMATION; 
-typedef MEMORY_BASIC_INFORMATION *PMEMORY_BASIC_INFORMATION; 
-# endif
-
 /* Get the page size.	*/
 static unsigned long CmmPageSize = 0;
 
@@ -105,34 +92,34 @@ CmmGetPageSize(void)
 /* Return the number of bytes that are writable starting at p.	*/
 /* The pointer p is assumed to be page aligned.			*/
 unsigned long
-CmmGetWritableLength(char *p)
+CmmGetWritableLength(void *p)
 {
-    MEMORY_BASIC_INFORMATION buf;
+    MEMORY_BASIC_INFORMATION info;
     unsigned long result;
     unsigned long protect;
     
-    result = VirtualQuery(p, &buf, sizeof(buf));
-    if (result != sizeof(buf)) {
+    result = VirtualQuery(p, &info, sizeof(info));
+    if (result != sizeof(info)) {
       fprintf(stderr, "Weird VirtualQuery result\n");
       exit(-1);
     }
-    protect = (buf.Protect & ~(PAGE_GUARD | PAGE_NOCACHE));
+    protect = (info.Protect & ~(PAGE_GUARD | PAGE_NOCACHE));
     if (!is_writable(protect)) {
         return(0);
     }
-    if (buf.State != MEM_COMMIT) return(0);
-    return(buf.RegionSize);
+    if (info.State != MEM_COMMIT) return(0);
+    return(info.RegionSize);
 }
 
-Ptr
+void *
 CmmGetStackBase(void)
 {
     int dummy;
-    char *sp = (char *)(&dummy);
+    void *sp = (void *)(&dummy);
     char *trunc_sp = (char *)((unsigned long)sp & ~(CmmGetPageSize() - 1));
     unsigned long size = CmmGetWritableLength(trunc_sp);
    
-    return (Ptr) (trunc_sp + size);
+    return (void *) (trunc_sp + size);
 }
 
 /*
@@ -146,77 +133,106 @@ CmmGetStackBase(void)
 
  * Return the smallest address p such that VirtualQuery
  * returns correct results for all addresses between p and start.
- * Assumes VirtualQuery returns correct information for start.
  */
-char *
-CmmLeastDescribedAddress(char * start)
+void *
+CmmLeastDescribedAddress(void * start)
 {  
-  MEMORY_BASIC_INFORMATION buf;
+  MEMORY_BASIC_INFORMATION info;
   SYSTEM_INFO sysinfo;
   DWORD result;
   LPVOID limit;
-  char * p;
+  LPVOID p;
   LPVOID q;
   
   GetSystemInfo(&sysinfo);
   limit = sysinfo.lpMinimumApplicationAddress;
-  p = (char *)((unsigned long)start & ~(CmmGetPageSize() - 1));
+  p = (LPVOID)((unsigned long)start & ~(CmmGetPageSize() - 1));
   for (;;) {
-  	q = (LPVOID)(p - CmmGetPageSize());
-  	if ((char *)q > (char *)p /* underflow */ || q < limit) break;
-  	result = VirtualQuery(q, &buf, sizeof(buf));
-  	if (result != sizeof(buf) || buf.AllocationBase == 0) break;
-  	p = (char *)(buf.AllocationBase);
+  	q = (LPVOID)((char *)p - CmmGetPageSize());
+  	if (q > p /* underflow */ || q < limit) break;
+  	result = VirtualQuery(q, &info, sizeof(info));
+  	if (result != sizeof(info) || info.AllocationBase == 0) break;
+  	p = info.AllocationBase;
   }
-  return(p);
+  return p;
+}
+
+void *
+getGlobalHeapStart()
+{
+  MEMORY_BASIC_INFORMATION info;
+  DWORD result;
+  /* need here a location allocated by malloc() */
+  if (globalHeapStart == 0)
+	  globalHeapStart = malloc(1);
+  result = VirtualQuery((LPCVOID)(globalHeapStart), &info, sizeof(info));
+  if (result != sizeof(info)) {
+    fprintf(stderr, "Weird VirtualQuery result\n");
+    exit(-1);
+  }
+  globalHeapEnd = globalHeapStart = info.AllocationBase;
+  return globalHeapStart;
+}
+
+void *
+getGlobalHeapEnd()
+{
+  MEMORY_BASIC_INFORMATION info;
+  DWORD result;
+  char * limit;
+  char * p;
+  
+  VirtualQuery((LPVOID)globalHeapStart, &info, sizeof(info));
+  limit = (char *)globalHeapStart + info.RegionSize;
+  for (p = (char *)globalHeapEnd; p < limit; p += CmmPageSize) {
+    result = VirtualQuery((LPVOID)p, &info, sizeof(info));
+    if (info.State != MEM_COMMIT
+	|| !is_writable(info.Protect))
+	break;
+  }
+  globalHeapEnd = p;
+  return(globalHeapEnd);
 }
 
 void
 CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
 {
-  static char static_root;
-  MEMORY_BASIC_INFORMATION buf;
+  /* static_root is any static variable */
+#define static_root globalHeapStart
+  MEMORY_BASIC_INFORMATION info;
   SYSTEM_INFO sysinfo;
   DWORD result;
-  DWORD protect;
   LPVOID p;
   char *base, *limit, *new_limit;
-  static char *mallocHeapBase = 0;
+#ifdef win3_1
   unsigned long v = GetVersion();
 
   /* Check that this is not NT, and Windows major version <= 3	*/
   if (!((v & 0x80000000) && (v & 0xff) <= 3))
     return;
+#endif
   /* find base of region used by malloc()	*/
-  if (mallocHeapBase == 0) {
-    extern int  firstHeapPage;
-    result = VirtualQuery((LPCVOID)firstHeapPage, &buf, sizeof(buf));
-    if (result != sizeof(buf)) {
-      fprintf(stderr, "Weird VirtualQuery result\n");
-      exit(-1);
-    }
-    mallocHeapBase = (char *)(buf.AllocationBase);
-  }
-  p = base = limit = CmmLeastDescribedAddress(&static_root);
+  getGlobalHeapStart();
+  p = base = limit = (char *)CmmLeastDescribedAddress(&static_root);
   GetSystemInfo(&sysinfo);
   while (p < sysinfo.lpMaximumApplicationAddress) {
-    result = VirtualQuery(p, &buf, sizeof(buf));
-    if (result != sizeof(buf) || buf.AllocationBase == mallocHeapBase)
+    result = VirtualQuery(p, &info, sizeof(info));
+    if (result != sizeof(info) || info.AllocationBase == globalHeapStart)
       break;
-    new_limit = (char *)p + buf.RegionSize;
-    protect = buf.Protect;
-    if (buf.State == MEM_COMMIT
-	&& is_writable(protect)) {
+    new_limit = (char *)p + info.RegionSize;
+    if (info.State == MEM_COMMIT
+	&& is_writable(info.Protect)) {
       if ((char *)p == limit)
 	limit = new_limit;
       else {
 	if (base != limit)
 	  (*ExamineArea)((GCP)base, (GCP)limit);
-	base = (char*) p;
+	base = (char *)p;
 	limit = new_limit;
       }
     }
-    if (p > (LPVOID)new_limit	/* overflow */) break;
+    if (p > (LPVOID)new_limit)	/* overflow */
+	break;
     p = (LPVOID)new_limit;
   }
   if (base != limit)
@@ -224,6 +240,12 @@ CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
 }
 
 #else
+
+void *
+getGlobalHeapEnd()
+{
+	return sbrk(0);
+}
 
 void
 CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
@@ -243,15 +265,37 @@ Word stackBottom;	/* The base of the stack	*/
 void
 CmmSetStackBottom(Word bottom)
 {
-#   ifdef STACKBOTTOM
+#ifdef STACKBOTTOM
 	stackBottom = (Word) STACKBOTTOM;
-#   else
-#     define STACKBOTTOM_ALIGNMENT_M1 0xffffff
-#     ifdef STACK_GROWS_DOWNWARD
-      stackBottom = (bottom + STACKBOTTOM_ALIGNMENT_M1)
+#else
+#	define STACKBOTTOM_ALIGNMENT_M1 0xffffff
+#	ifdef STACK_GROWS_DOWNWARD
+	stackBottom = (bottom + STACKBOTTOM_ALIGNMENT_M1)
 	& ~STACKBOTTOM_ALIGNMENT_M1;
-#     else
-      stackBottom = bottom & ~STACKBOTTOM_ALIGNMENT_M1;
-#     endif
-#   endif
+#	else
+	stackBottom = bottom & ~STACKBOTTOM_ALIGNMENT_M1;
+#	endif
+#endif
 }
+
+/*---------------------------------------------------------------------------*
+ * -- Data Start
+ *---------------------------------------------------------------------------*/
+
+#ifdef __svr4__
+
+char *
+CmmSVR4DataStart(int max_page_size)
+{
+  Word text_end = ((Word)(&etext) + sizeof(Word) - 1) & ~(sizeof(Word) - 1);
+  /* etext rounded to word boundary	*/
+  Word next_page = (text_end + (Word)max_page_size - 1)
+    & ~((Word)max_page_size - 1);
+  Word page_offset = (text_end & ((Word)max_page_size - 1));
+  char * result = (char *)(next_page + page_offset);
+  /* Note that this isn't equivalent to just adding
+   * max_page_size to &etext if &etext is at a page boundary
+   */
+  return(result);
+}
+#endif

@@ -47,7 +47,7 @@ typedef unsigned char 	Byte;
 typedef unsigned long	Word;
 typedef char *		Ptr;
 typedef Ptr *		GCP;	/* Pointer to a garbage collected object */
-typedef unsigned	Page;	/* Page number */
+typedef unsigned	page;	/* Page number */
 
 /*---------------------------------------------------------------------------*
  * -- Compatibility
@@ -133,8 +133,7 @@ extern void *	globalHeapStart; // start of global heap
 #   define DATASTART USRDATA
 #elif defined(__svr4__) || defined(DGUX)
     extern int etext;
-    extern char * CmmSVR4DataStart(int);
-#   define DATASTART CmmSVR4DataStart(0x10000)
+#   define DATASTART SVR4DataStart(0x10000)
 #elif defined(hp9000s300)
     extern int etext;
 #   define DATASTART ((((unsigned long)(&etext)) + 0xfff) & ~0xfff)
@@ -193,5 +192,10 @@ extern void *	globalHeapStart; // start of global heap
     extern char etext;
 #   define DATASTART (&etext)
 #endif
+
+#define SVR4DataStart(max_page_size) \
+   ((unsigned long)(&etext) % max_page_size ? \
+    (unsigned long)(&etext) + max_page_size : \
+    (unsigned long)&etext)
 
 #endif /* ! _MACHINE_H */

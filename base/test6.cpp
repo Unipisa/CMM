@@ -10,7 +10,7 @@ public:
   void traverse() { Cmm::heap->scavenge((CmmObject **)&y); }
 };
 
-
+void
 main()
 {
   MyClass *MyVar;

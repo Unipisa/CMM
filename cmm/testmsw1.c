@@ -9,7 +9,6 @@ enum _TreeTag {
     TAG_String,
     TAG_Double,
     TAG_Ptr
-
   };
 
 typedef enum _TreeTag	TreeTag;
@@ -259,11 +258,10 @@ foo()
 {
 	List l = NULL;
 	List l1;
-        int i;
+	int i;
 
-	for (i = 0; i < maxListSize; i++) {
+	for (i = 0; i < maxListSize; i++)
 		push(dummyList(i), l);
-	}
 
 	l1 = l;
 	i  = 0;
@@ -282,12 +280,12 @@ foo()
 char *
 strFromInt(int v)
 {
-        char buf[40];
+	char buf[40];
 	char * ret;
 	int  n;
 
 #if defined(__sparc)
-	strlen(sprintf(buf, "%d", v));
+	n = strlen(sprintf(buf, "%d", v));
 #else
 	n = sprintf(buf, "%d", v);
 #endif
@@ -296,10 +294,10 @@ strFromInt(int v)
 }
 
 void
-test1()
+test()
 {
-        int    i;
-        Tree tree = treeNewInt(10);
+	int    i;
+	Tree tree = treeNewInt(10);
 
 	tree = treeNewCons(tree, treeNewDouble(32.3));
 	tree = treeNewCons(tree, treeNewString("Natascia"));
@@ -319,16 +317,11 @@ test1()
 	tree = treeNewInt(10);
 }
 
-/* #define TEST_ON_DEMAND */
 
-#ifdef TEST_ON_DEMAND
-
-int
+void
 main(int argc, char ** argv)
 {
 	int 	i;
-
-        mswInit(MSW_OnDemand);
 
 	if (argc >= 2)
 	      maxListSize = atoi(argv[1]);
@@ -336,52 +329,16 @@ main(int argc, char ** argv)
 	if (argc >= 3)
 	      maxIter = atoi(argv[2]);
 
-	printf("\nGarbage Collection ON DEMAND \n\n");
+	printf("\nGarbage Collection Mark&Sweep Heap \n\n");
 	printf("\n+++++ Using maxListSize = %d \n\n", maxListSize);
 	printf("\n+++++ Using maxIter = %d \n\n", maxIter);
 
-	test1();
-	mswCollect();
-	mswShowInfo(); /* Final statistics should give same heap size */
-
-	for (i = 0; i < maxIter - 1; i++) {
-		test1();	
-		mswCollect();
-	}
-
-	mswShowInfo();
-	mswCheckHeap(1);
-	return 0;
-}
-
-#else /* TEST_AUTOMATIC */
-
-int
-main(int argc, char ** argv)
-{
-	int 	i;
-
-        mswInit(MSW_Automatic);
-
-	if (argc >= 2)
-	      maxListSize = atoi(argv[1]);
-
-	if (argc >= 3)
-	      maxIter = atoi(argv[2]);
-
-	printf("\nGarbage Collection AUTOMATIC \n\n");
-	printf("\n+++++ Using maxListSize = %d \n\n", maxListSize);
-	printf("\n+++++ Using maxIter = %d \n\n", maxIter);
-
-	test1();
+	test();
 	mswShowInfo();
 
 	for (i = 0; i < maxIter - 1; i++)
-		test1();	
+		test();	
 
 	mswShowInfo();
 	mswCheckHeap(1);
-	return 0;
 }
-
-#endif /* TEST_AUTOMATIC */

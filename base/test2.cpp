@@ -30,7 +30,7 @@ struct  cell : CmmObject  {
 
 typedef  cell* cellptr;
 
-#define TOT	50000
+#define TOT	5000
 
 struct  cella  {
   cellptr ptr[TOT];
@@ -80,4 +80,5 @@ main()
 	  }
 	  cl = cl->next;
 	}
+	return 0;
 }

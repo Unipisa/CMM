@@ -10,7 +10,7 @@ char *	v2[VECT_SIZE];
 static par = 0;
 
 void
-test1()
+test()
 {
 	int i;
 
@@ -26,7 +26,7 @@ test1()
 
 extern void mswShowFreeChunks(void);
 
-int 
+void 
 main(int argc, char ** argv)
 {
 
@@ -36,17 +36,13 @@ main(int argc, char ** argv)
 	if (par)
 	      printf("\n+++++ Using collector +++++\n");
 
-	mswInit();
-
-	test1();
+	test();
 	if (par) 
 	      mswCollect();
-	test1();
+	test();
 	if (par)
 	      mswCollect();
 
 	mswShowInfo();
 	mswCheckHeap(1);
-
-	return 0;
 }

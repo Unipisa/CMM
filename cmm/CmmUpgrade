@@ -1,0 +1,10 @@
+#/bin/sh
+#
+sed -e s/"roots.setp"/"roots.add"/g \
+    -e s/"roots.set"/"roots.add"/g \
+    -e s/"roots.unsetp"/"roots.remove"/g \
+    -e s/"roots.unset"/"roots.remove"/g \
+    -e s/"gcRoots"/"registerRootArea"/g \
+    -e s/"gcUnroots"/"unregisterRootArea"/g $1 \
+    > TmpSedOutput
+mv TmpSedOutput $1

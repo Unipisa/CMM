@@ -192,7 +192,7 @@ void  listtest2()
 CP  gp;		/* A global pointer */
 
 
-
+void
 main()
 {
 //  Cmm::heap = new TempHeap(10000);

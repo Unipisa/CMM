@@ -6,7 +6,7 @@
    where all values are optional and expressed in megabytes.
 */
 
-#include <stream.h>
+#include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
@@ -42,6 +42,7 @@ makeheap(int initial, int final, int inc)
 	    0, 1, CMM_GCTHRESHOLD, CMM_FLAGS, 0);
 }
 
+void
 main(int argc, char* argv[])
 {
 	block  *lp = NULL;
@@ -51,7 +52,7 @@ main(int argc, char* argv[])
 	makeheap((argc == 1) ? 1 : atoi(argv[1]),
 		  max,
 		  (argc < 4) ? 2 : atoi(argv[3]));
-	cout << "Will try to allocate up to " << max << "MB of heap\n";
+	printf("Will try to allocate up to %dMB of heap\n", max);
 	for  (i = 0 ; i < 20; i++)  {
 	   lp = new block(lp, i);
 	   Cmm::heap->collect();
@@ -62,10 +63,10 @@ main(int argc, char* argv[])
 	Cmm::heap->collect();
 	i = 0;
 	while  (lp != NULL)  {
-	   cout << lp->number[0] << " " << lp->number[24999] << "  ";
+	   printf("%d %d ", lp->number[0], lp->number[24999]);
 	   lp = lp->prev;
-	   if  (++i % 10 == 0)  cout << "\n";
+	   if  (++i % 10 == 0)  printf("\n");
 	}
-	cout << "\n";
+	printf("\n");
 	exit(0);
 }

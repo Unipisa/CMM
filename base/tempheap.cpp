@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------*
  *
- *  tempheap.cc: a heap for temporary data
+ *  tempheap.cpp: a heap for temporary data
  *  date:	3 January 1995
  *  authors:	Giuseppe Attardi and Tito Flagella
  *  email:	cmm@di.unipi.it

@@ -1,0 +1,2711 @@
+diff -c /home/omega/attardi/posso/cmm/ChangeLog /project/posso/cmm/curr/cmm/ChangeLog
+*** /home/omega/attardi/posso/cmm/ChangeLog	Mon Dec 23 13:27:16 1996
+--- /project/posso/cmm/curr/cmm/ChangeLog	Wed Dec 18 20:57:31 1996
+***************
+*** 1,39 ****
+- Sun Dec 22 10:05:24 1996  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.h (Set): added template class Set.
+- 
+- 	* doc/CMMguide.tex (subsection{Array of CmmObject's}):
+- 	revised to describe new implementation
+- 
+- 	* tempheap.h (RootSet): used template class Set for dealing with
+- 	sets of roots.
+- 	Class RootSet now contains two members:
+- 	  Set<CmmObject>  roots;
+- 	  Set<CmmObject*> rootsLoc;
+- 
+- 	* cmm.cpp: changed gcRoots() and gcUnroots() to
+- 	registerRootArea() and unregisterRootArea(), which use the classes
+- 	RootArea and RootAreas
+- 
+- 	* tempheap.cpp (RootSet): renamed
+- 	set -> add
+- 	setp -> add
+- 	unset -> remove
+- 	unsetp -> remove
+- 
+- 	* cmm.h (CmmHeap): added reservedPages. Requires recompiling
+- 	all applications
+- 
+- 	* msw.cpp (MarkAndSweep): constructor replaces mswInit()
+- 
+- 	* cmm.cpp (allocatePages): updates reservedPages
+- 
+- 	* cmm.h (_CmmInit): eliminated  ~_CmmInit()
+- 
+- 	* cmm.cpp (collect): restore scanned pages up to scan != lastStable
+- 
+- 	* machine.h: renamed type page -> Page
+- 
+  Wed Dec 18 17:07:57 1996  Giuseppe Attardi  <attardi@omega>
+  
+  	* cmm.cpp (CmmInit): heap rounding requires cast to (Word) for
+--- 1,3 ----
+diff -c /home/omega/attardi/posso/cmm/cmm.cpp /project/posso/cmm/curr/cmm/cmm.cpp
+*** /home/omega/attardi/posso/cmm/cmm.cpp	Mon Dec 23 13:29:16 1996
+--- /project/posso/cmm/curr/cmm/cmm.cpp	Wed Dec 18 21:22:12 1996
+***************
+*** 1,6 ****
+  /*---------------------------------------------------------------------------*
+   *
+!  *  cmm.cpp:	This module implements the PoSSo Customisable Memory Manager
+   *		(CMM). CMM provides garbage collected storage for C++ programs.
+   *  date:	3 January 1995
+   *  authors:	Giuseppe Attardi and Tito Flagella
+--- 1,6 ----
+  /*---------------------------------------------------------------------------*
+   *
+!  *  cmm.cpp:	This module implements the POSSO Customisable Memory Management
+   *		(CMM). CMM provides garbage collected storage for C++ programs.
+   *  date:	3 January 1995
+   *  authors:	Giuseppe Attardi and Tito Flagella
+***************
+*** 12,17 ****
+--- 12,19 ----
+   *  Copyright (C) 1990 Digital Equipment Corporation.
+   *  Copyright (C) 1993, 1994, 1995, 1996 Giuseppe Attardi and Tito Flagella.
+   *
++  *  This file is part of the PoSSo Customizable Memory Manager (CMM).
++  *
+   * Permission to use, copy, and modify this software and its documentation is
+   * hereby granted only under the following terms and conditions.  Both the
+   * above copyright notice and this permission notice must appear in all copies
+***************
+*** 54,60 ****
+  
+  /* Version tag */
+  
+! char*  Cmm::version = "CMM 1.8.2";
+  
+  /*---------------------------------------------------------------------------*
+   *
+--- 56,62 ----
+  
+  /* Version tag */
+  
+! char*  Cmm::version = "CMM 1.8.1";
+  
+  /*---------------------------------------------------------------------------*
+   *
+***************
+*** 65,92 ****
+   * independent of the processor's virtual memory page size.
+   *---------------------------------------------------------------------------*/
+  
+! static int   totalPages;	/* # of pages in the heap
+! 				   = freePages
+! 				   + Cmm::theDefaultHeap.reservedPages
+! 				   + Cmm::theMSHeap.reservedPages
+! 				   + reservedPages in other heaps	*/
+  static int   heapSpanPages;	/* # of pages that span the heap	*/
+  int          freePages;	        /* # of pages not yet allocated		*/
+  static int   freeWords = 0;	/* # words left on the current page	*/
+  static Ptr   *firstFreeWord;	/* Ptr to the first free word on the current
+  				   page */
+! Page	     firstFreePage;	/* First possible free page		*/
+! static Page  queueHead;		/* Head of list of stable set of pages	*/
+! static Page  queueTail;     	/* Tail of list of stable set of pages	*/
+  
+! Page	     firstHeapPage;	/* Page # of first heap page		*/
+! Page	     lastHeapPage;	/* Page # of last heap page		*/
+  unsigned long *objectMap;	/* Bitmap of objects			*/
+  #if !HEADER_SIZE || defined(MARKING)
+  unsigned long *liveMap;		/* Bitmap of live objects		*/
+  #endif
+  
+! Page	     *pageLink;		/* Page link for each page		*/
+  short	     *pageSpace;	/* Space number for each page		*/
+  short	     *pageGroup;	/* Size of group of pages		*/
+  CmmHeap      **pageHeap;	/* Heap to which each page belongs	*/
+--- 67,90 ----
+   * independent of the processor's virtual memory page size.
+   *---------------------------------------------------------------------------*/
+  
+! static int   totalPages;	/* # of pages in the heap		*/
+  static int   heapSpanPages;	/* # of pages that span the heap	*/
+  int          freePages;	        /* # of pages not yet allocated		*/
+  static int   freeWords = 0;	/* # words left on the current page	*/
+  static Ptr   *firstFreeWord;	/* Ptr to the first free word on the current
+  				   page */
+! page	     firstFreePage;	/* First possible free page		*/
+! static page  queueHead;		/* Head of list of stable set of pages	*/
+! static page  queueTail;     	/* Tail of list of stable set of pages	*/
+  
+! page	     firstHeapPage;	/* Page # of first heap page		*/
+! page	     lastHeapPage;	/* Page # of last heap page		*/
+  unsigned long *objectMap;	/* Bitmap of objects			*/
+  #if !HEADER_SIZE || defined(MARKING)
+  unsigned long *liveMap;		/* Bitmap of live objects		*/
+  #endif
+  
+! page	     *pageLink;		/* Page link for each page		*/
+  short	     *pageSpace;	/* Space number for each page		*/
+  short	     *pageGroup;	/* Size of group of pages		*/
+  CmmHeap      **pageHeap;	/* Heap to which each page belongs	*/
+***************
+*** 96,102 ****
+  				   StableSpace within collect().	*/
+  
+  int          tablePages;	/* # of pages used by tables		*/
+! static Page  firstTablePage;	/* index of first page used by table	*/
+  
+  /*----------------------------------------------------------------------*
+   * -- Page spaces
+--- 94,100 ----
+  				   StableSpace within collect().	*/
+  
+  int          tablePages;	/* # of pages used by tables		*/
+! page         firstTablePage;	/* index of first page used by table	*/
+  
+  /*----------------------------------------------------------------------*
+   * -- Page spaces
+***************
+*** 265,271 ****
+  // constructor is called before main().
+  static _CmmInit _DummyCmmInit;
+  
+- 
+  /*---------------------------------------------------------------------------*
+   *
+   * --  Roots
+--- 263,268 ----
+***************
+*** 275,369 ****
+   *
+   *---------------------------------------------------------------------------*/
+  
+! typedef struct
+! RootArea
+  {
+    GCP	     addr;		/* Address of the roots */
+    int  	     bytes;		/* Number of bytes in the roots */
+! };
+! 
+! class RootAreas
+! {
+!  public:
+!   RootAreas()
+!     {
+!       count = 0;
+!       max = 0;
+!       free = 0;
+!     }
+  
+-   void add(void * addr, int bytes)
+-     {
+- #     define	    setIncrement 10
+- 
+-       if (free)
+- 	{
+- 	  for (int i = 0; i < count; i++)
+- 	    if (entries[i].addr == NULL)
+- 	      {
+- 		entries[i].addr = (GCP)addr;
+- 		entries[i].bytes = bytes;
+- 		free--;
+- 		return;
+- 	      }
+- 	}
+-       if (count == max)
+- 	{
+- 	  RootArea  *np;
+- 	  max += setIncrement;
+- 	  np = new RootArea[max];
+- 	  for (int i = 0; i < count; i++)
+- 	    np[i] = entries[i];
+- 	  delete  entries;
+- 	  entries = np;
+- 	}
+-       entries[count].addr = (GCP)addr;
+-       entries[count],bytes = bytes;
+-       count++;
+-     }
+- 
+-   void remove(void* addr)
+-     {
+-       int i;
+- 
+-       for (i = 0; i < count; i++)
+- 	if (entries[i].addr == addr)
+- 	  {
+- 	    entries[i].addr = NULL;
+- 	    free++;
+- 	    return;
+- 	  }
+-       assert(i < count);
+-     }
+- 
+-   int  count;
+-   RootArea*   entries;
+- 
+-  private:
+-   int  max;
+-   int  free;
+- };
+- 
+- static RootAreas	roots;	// areas registered as containing roots
+  
+  /*---------------------------------------------------------------------------*
+!  * -- registerRootArea()
+   *
+!  * Areas of memory containing roots are "registered" with the garbage
+!  * collector by the following procedure.
+   *
+   *---------------------------------------------------------------------------*/
+  
+  void
+! registerRootArea(void * addr, int bytes)
+  {
+!   roots.add(addr, bytes);
+  }
+  
+  void
+! unregisterRootArea(void* addr)
+  {
+!   roots.remove(addr);
+  }
+  
+  /*---------------------------------------------------------------------------*
+--- 272,339 ----
+   *
+   *---------------------------------------------------------------------------*/
+  
+! #define	    rootsIncrement 10
+! static int  rootsCount = 0;
+! static int  rootsSize = 0;
+! static int  freedEntries = 0;
+! 
+! static struct
+! RootsStruct
+  {
+    GCP	     addr;		/* Address of the roots */
+    int  	     bytes;		/* Number of bytes in the roots */
+! } * roots;
+  
+  
+  /*---------------------------------------------------------------------------*
+!  * -- gcRoots
+   *
+!  * Additional roots are "registered" with the garbage collector by the
+!  * following procedure.
+   *
+   *---------------------------------------------------------------------------*/
+  
+  void
+! gcRoots(void * addr, int bytes)
+  {
+!   if (freedEntries)
+!     {
+!       for (int i = 0; i < rootsCount; i++)
+! 	if (roots[i].addr == 0)
+! 	  {
+! 	    roots[i].addr = (GCP)addr;
+! 	    roots[i].bytes = bytes;
+! 	    freedEntries--;
+! 	  }
+!     }
+!   if (rootsCount == rootsSize)
+!     {
+!       RootsStruct  *np;
+!       rootsSize += rootsIncrement;
+!       np = new RootsStruct[rootsSize];
+!       for (int i = 0; i < rootsCount; i++)
+! 	np[i] = roots[i];
+!       delete  roots;
+!       roots = np;
+!     }
+!   roots[rootsCount].addr = (GCP)addr;
+!   roots[rootsCount].bytes = bytes;
+!   rootsCount++;
+  }
+  
+  void
+! gcUnroots(void* addr)
+  {
+!   int i;
+! 
+!   for (i = 0; i < rootsCount; i++)
+!     if (roots[i].addr == addr)
+!       {
+! 	roots[i].addr = 0;
+! 	freedEntries++;
+! 	break;
+!       }
+!   assert(i < rootsCount);
+  }
+  
+  /*---------------------------------------------------------------------------*
+***************
+*** 402,408 ****
+    int shift = BIT_INDEX(this+1);
+    register unsigned long bits = objectMap[index] >> shift;
+    register int inner = bitsPerWord - shift;
+!   Page nextPage = GCPtoPage(this);
+    nextPage += pageGroup[nextPage];
+    int max = ((int)pageToGCP(nextPage) - (int)this)
+      / (bitsPerWord * bytesPerWord);
+--- 372,378 ----
+    int shift = BIT_INDEX(this+1);
+    register unsigned long bits = objectMap[index] >> shift;
+    register int inner = bitsPerWord - shift;
+!   page nextPage = GCPtoPage(this);
+    nextPage += pageGroup[nextPage];
+    int max = ((int)pageToGCP(nextPage) - (int)this)
+      / (bitsPerWord * bytesPerWord);
+***************
+*** 497,506 ****
+  # endif
+  #endif				// HEADER_SIZE
+  
+! DefaultHeap	*Cmm::theDefaultHeap;
+  UncollectedHeap *Cmm::theUncollectedHeap;
+- CmmHeap		*Cmm::theMSHeap;
+  CmmHeap		*Cmm::heap;
+  
+  // used during initialization of objects:
+  static CmmObject	*aCmmObject;
+--- 467,476 ----
+  # endif
+  #endif				// HEADER_SIZE
+  
+! DefaultHeap *Cmm::theDefaultHeap;
+  UncollectedHeap *Cmm::theUncollectedHeap;
+  CmmHeap		*Cmm::heap;
++ CmmHeap		*Cmm::theMSHeap = (CmmHeap*) 100; // 100 to get it working with C
+  
+  // used during initialization of objects:
+  static CmmObject	*aCmmObject;
+***************
+*** 523,528 ****
+--- 493,499 ----
+  DefaultHeap::DefaultHeap()
+  {
+    usedPages 	= 0;
++   reservedPages	= 0;
+    stablePages 	= 0;
+  }
+  
+***************
+*** 539,545 ****
+  CmmInit()
+  {
+    char  *heap;
+!   Page  i;
+  
+    /* Log actual heap parameters if from environment or logging */
+    if ((environmentValue("CMM_MINHEAP", Cmm::minHeap)
+--- 510,516 ----
+  CmmInit()
+  {
+    char  *heap;
+!   page  i;
+  
+    /* Log actual heap parameters if from environment or logging */
+    if ((environmentValue("CMM_MINHEAP", Cmm::minHeap)
+***************
+*** 587,593 ****
+  
+    pageSpace = (short *)pageToGCP(firstTablePage);
+    pageGroup = &pageSpace[totalPages];
+!   pageLink = (Page *)&pageGroup[totalPages];
+    pageHeap = (CmmHeap **)&pageLink[totalPages];
+    objectMap = (unsigned long *)&pageHeap[totalPages];
+  # if !HEADER_SIZE || defined(MARKING)
+--- 558,564 ----
+  
+    pageSpace = (short *)pageToGCP(firstTablePage);
+    pageGroup = &pageSpace[totalPages];
+!   pageLink = (page *)&pageGroup[totalPages];
+    pageHeap = (CmmHeap **)&pageLink[totalPages];
+    objectMap = (unsigned long *)&pageHeap[totalPages];
+  # if !HEADER_SIZE || defined(MARKING)
+***************
+*** 620,625 ****
+--- 591,597 ----
+    Cmm::created = true;
+  
+    Cmm::theDefaultHeap->usedPages 	= 0;
++   Cmm::theDefaultHeap->reservedPages 	= 0;
+    Cmm::theDefaultHeap->stablePages 	= 0;
+    Cmm::theDefaultHeap->firstUnusedPage	= firstHeapPage;
+    Cmm::theDefaultHeap->firstReservedPage= firstHeapPage;
+***************
+*** 680,696 ****
+  expandHeap(int increment)
+  {
+    int  inc_totalPages = increment/bytesPerPage;
+!   Page  new_firstHeapPage;
+!   Page  inc_firstHeapPage;
+!   Page  new_lastHeapPage;
+!   Page  inc_lastHeapPage;
+    int  new_totalPages;
+!   Page  *new_pageLink;
+    unsigned long  *new_objectMap;
+  # if !HEADER_SIZE || defined(MARKING)
+    unsigned long  *new_liveMap;
+  # endif
+!   Page  i;
+  
+    short *new_pageSpace;
+    short *new_pageGroup;
+--- 652,668 ----
+  expandHeap(int increment)
+  {
+    int  inc_totalPages = increment/bytesPerPage;
+!   page  new_firstHeapPage;
+!   page  inc_firstHeapPage;
+!   page  new_lastHeapPage;
+!   page  inc_lastHeapPage;
+    int  new_totalPages;
+!   page  *new_pageLink;
+    unsigned long  *new_objectMap;
+  # if !HEADER_SIZE || defined(MARKING)
+    unsigned long  *new_liveMap;
+  # endif
+!   page  i;
+  
+    short *new_pageSpace;
+    short *new_pageGroup;
+***************
+*** 750,756 ****
+  # endif
+    new_pageSpace = (short *)new_tables;
+    new_pageGroup = &new_pageSpace[heapSpanPages];
+!   new_pageLink = (Page *)&new_pageGroup[heapSpanPages];
+    new_pageHeap = (CmmHeap **)&new_pageLink[heapSpanPages];
+    new_objectMap = (unsigned long *)&new_pageHeap[heapSpanPages];
+  #if !HEADER_SIZE || defined(MARKING)
+--- 722,728 ----
+  # endif
+    new_pageSpace = (short *)new_tables;
+    new_pageGroup = &new_pageSpace[heapSpanPages];
+!   new_pageLink = (page *)&new_pageGroup[heapSpanPages];
+    new_pageHeap = (CmmHeap **)&new_pageLink[heapSpanPages];
+    new_objectMap = (unsigned long *)&new_pageHeap[heapSpanPages];
+  #if !HEADER_SIZE || defined(MARKING)
+***************
+*** 768,786 ****
+  #endif
+  
+    /* Recycle old tables */
+!   Page lastTablePage = firstTablePage + tablePages - 1;
+    for (i = firstTablePage; i <= lastTablePage; i++)
+      new_pageHeap[i] = NOHEAP;
+    /* Fill gaps */
+!   Page gapStart = MIN(lastTablePage, inc_lastHeapPage);
+!   Page gap1Start = MIN(lastHeapPage, gapStart);
+  
+!   Page gapEnd = MAX(firstTablePage, inc_firstHeapPage);
+!   Page gap2End = MAX(firstHeapPage, gapEnd);
+  
+!   Page gap1End = (gapEnd == gap2End) ?
+      MAX(firstHeapPage, MIN(firstTablePage, inc_firstHeapPage)) : gapEnd;
+!   Page gap2Start = (gapStart == gap1Start) ?
+      MIN(lastHeapPage, MAX(lastTablePage, inc_lastHeapPage)) : gapStart;
+    for (i = gap1Start + 1; i < gap1End; i++)
+      new_pageHeap[i] = UNCOLLECTEDHEAP;
+--- 740,758 ----
+  #endif
+  
+    /* Recycle old tables */
+!   page lastTablePage = firstTablePage + tablePages - 1;
+    for (i = firstTablePage; i <= lastTablePage; i++)
+      new_pageHeap[i] = NOHEAP;
+    /* Fill gaps */
+!   page gapStart = MIN(lastTablePage, inc_lastHeapPage);
+!   page gap1Start = MIN(lastHeapPage, gapStart);
+  
+!   page gapEnd = MAX(firstTablePage, inc_firstHeapPage);
+!   page gap2End = MAX(firstHeapPage, gapEnd);
+  
+!   page gap1End = (gapEnd == gap2End) ?
+      MAX(firstHeapPage, MIN(firstTablePage, inc_firstHeapPage)) : gapEnd;
+!   page gap2Start = (gapStart == gap1Start) ?
+      MIN(lastHeapPage, MAX(lastTablePage, inc_lastHeapPage)) : gapStart;
+    for (i = gap1Start + 1; i < gap1End; i++)
+      new_pageHeap[i] = UNCOLLECTEDHEAP;
+***************
+*** 841,849 ****
+   *---------------------------------------------------------------------------*/
+  
+  static void
+! emptyStableSpace(Page end)
+  {
+!   Page scan;
+    if (queueHead == 0)		// happens in test3
+      return;
+    end = pageLink[end];
+--- 813,821 ----
+   *---------------------------------------------------------------------------*/
+  
+  static void
+! emptyStableSpace(page end)
+  {
+!   page scan;
+    if (queueHead == 0)		// happens in test3
+      return;
+    end = pageLink[end];
+***************
+*** 872,878 ****
+   *---------------------------------------------------------------------------*/
+  
+  static void
+! queue(Page page)
+  {
+    if (queueHead != 0)
+      pageLink[queueTail] = page;
+--- 844,850 ----
+   *---------------------------------------------------------------------------*/
+  
+  static void
+! queue(int page)
+  {
+    if (queueHead != 0)
+      pageLink[queueTail] = page;
+***************
+*** 895,901 ****
+  void
+  promotePage(GCP cp)
+  {
+!   Page page = GCPtoPage(cp);
+  
+    // Don't promote pages belonging to other heaps.
+    // (We noticed no benefit by inlining the following test in the caller)
+--- 867,873 ----
+  void
+  promotePage(GCP cp)
+  {
+!   page page = GCPtoPage(cp);
+  
+    // Don't promote pages belonging to other heaps.
+    // (We noticed no benefit by inlining the following test in the caller)
+***************
+*** 1077,1083 ****
+  DefaultHeap::scavenge(CmmObject **loc)
+  {
+    GCP pp = (GCP)*loc;
+!   Page page = GCPtoPage(pp);
+    if (!OUTSIDE_HEAPS(page))
+      {
+        GCP p = (GCP)basePointer((GCP)*loc);
+--- 1049,1055 ----
+  DefaultHeap::scavenge(CmmObject **loc)
+  {
+    GCP pp = (GCP)*loc;
+!   page page = GCPtoPage(pp);
+    if (!OUTSIDE_HEAPS(page))
+      {
+        GCP p = (GCP)basePointer((GCP)*loc);
+***************
+*** 1198,1207 ****
+      CmmExamineStaticAreas(CmmExamineStaticArea);
+  
+      /* Examine registered roots:		*/
+!     for (int i = 0; i < roots.count; i++)
+        {
+! 	fp = roots.entries[i].addr;
+! 	for (int j = roots.entries[i].bytes; j > 0; j = j - bytesPerWord)
+  	  promotePage((GCP)*fp++);
+        }
+      /* Examine the uncollected heap:		*/
+--- 1170,1179 ----
+      CmmExamineStaticAreas(CmmExamineStaticArea);
+  
+      /* Examine registered roots:		*/
+!     for (int i = 0; i < rootsCount; i++)
+        {
+! 	fp = roots[i].addr;
+! 	for (int j = roots[i].bytes; j > 0; j = j - bytesPerWord)
+  	  promotePage((GCP)*fp++);
+        }
+      /* Examine the uncollected heap:		*/
+***************
+*** 1232,1238 ****
+    // Sweep across stable pages and move their constituent items.
+    page = queueHead;
+    // pages promoted from here should survive this generation:
+!   Page lastStable = queueTail;
+    while (page)
+      {
+  #     ifdef MARKING		// pointers to unmarked objects within
+--- 1204,1210 ----
+    // Sweep across stable pages and move their constituent items.
+    page = queueHead;
+    // pages promoted from here should survive this generation:
+!   int lastStable = queueTail;
+    while (page)
+      {
+  #     ifdef MARKING		// pointers to unmarked objects within
+***************
+*** 1273,1280 ****
+  #ifdef MARKING
+    {
+      /* Restore scanned pages to STABLESPACE */
+!     Page scan = queueHead;
+!     while (scan != lastStable)
+        {
+  	pageSpace[scan] = STABLESPACE;
+  	scan = pageLink[scan];
+--- 1245,1252 ----
+  #ifdef MARKING
+    {
+      /* Restore scanned pages to STABLESPACE */
+!     int scan = queueHead;
+!     while (scan)
+        {
+  	pageSpace[scan] = STABLESPACE;
+  	scan = pageLink[scan];
+***************
+*** 1331,1338 ****
+   *
+   *---------------------------------------------------------------------------*/
+  
+! static inline Page
+! nextPage(Page page)
+  {
+    return (page == lastHeapPage) ? firstHeapPage : page + 1;
+  }
+--- 1303,1310 ----
+   *
+   *---------------------------------------------------------------------------*/
+  
+! static inline page
+! nextPage(page page)
+  {
+    return (page == lastHeapPage) ? firstHeapPage : page + 1;
+  }
+***************
+*** 1352,1358 ****
+  allocatePages(int pages, CmmHeap *heap)
+  {
+    int  	free;			/* # contiguous free pages */
+!   Page	firstPage;		/* Page # of first free page */
+    int	allPages;		/* # of pages in the heap */
+    GCP	firstByte;		/* address of first free page */
+  
+--- 1324,1330 ----
+  allocatePages(int pages, CmmHeap *heap)
+  {
+    int  	free;			/* # contiguous free pages */
+!   int	firstPage;		/* Page # of first free page */
+    int	allPages;		/* # of pages in the heap */
+    GCP	firstByte;		/* address of first free page */
+  
+***************
+*** 1389,1395 ****
+   FOUND:
+    // Ok, I found all needed contiguous pages.
+    freePages -= pages;
+-   heap->reservedPages += pages;
+    firstByte = pageToGCP(firstPage);
+    int i = 1;
+    while (pages--)
+--- 1361,1366 ----
+***************
+*** 1420,1426 ****
+  GCP
+  DefaultHeap::getPages(int pages)
+  {
+!   Page firstPage;		/* Page # of first free page	*/
+  
+  //#define NEW_GETPAGE bad: grows valla to 29063K
+  #ifndef NEW_GETPAGE
+--- 1391,1397 ----
+  GCP
+  DefaultHeap::getPages(int pages)
+  {
+!   page firstPage;		/* Page # of first free page	*/
+  
+  //#define NEW_GETPAGE bad: grows valla to 29063K
+  #ifndef NEW_GETPAGE
+***************
+*** 1478,1484 ****
+      firstFreeWord = allocatePages(reserved, this);
+      firstUnusedPage = firstPage = GCPtoPage(firstFreeWord);
+      int i = firstPage + reserved - 1;
+!     lastReservedPage = MAX(lastReservedPage, (Page)i);
+      for (i = pages; i < reserved; i++)
+        pageSpace[firstPage + i] = UNALLOCATEDSPACE;
+    }
+--- 1449,1456 ----
+      firstFreeWord = allocatePages(reserved, this);
+      firstUnusedPage = firstPage = GCPtoPage(firstFreeWord);
+      int i = firstPage + reserved - 1;
+!     lastReservedPage = MAX(lastReservedPage, (page)i);
+!     reservedPages += reserved;
+      for (i = pages; i < reserved; i++)
+        pageSpace[firstPage + i] = UNALLOCATEDSPACE;
+    }
+***************
+*** 1650,1656 ****
+  #     endif
+        )
+      {
+!       Page page = GCPtoPage(obj);
+        if (OUTSIDE_HEAPS(page))
+  	return false;
+      }
+--- 1622,1628 ----
+  #     endif
+        )
+      {
+!       page page = GCPtoPage(obj);
+        if (OUTSIDE_HEAPS(page))
+  	return false;
+      }
+***************
+*** 1767,1773 ****
+  static void
+  verifyObject(GCP cp, bool old)
+  {
+!   Page  page = GCPtoPage(cp);
+    GCP  xp = pageToGCP(page);	/* Ptr to start of page */
+    int  error = 0;
+  
+--- 1739,1745 ----
+  static void
+  verifyObject(GCP cp, bool old)
+  {
+!   page  page = GCPtoPage(cp);
+    GCP  xp = pageToGCP(page);	/* Ptr to start of page */
+    int  error = 0;
+  
+***************
+*** 1813,1819 ****
+  # else
+    int  size = ((CmmObject *)cp)->words();
+  # endif
+!   Page pagen = GCPtoPage(cp);
+    int error = 0;
+  
+    if  FORWARDED(cp[-HEADER_SIZE])  goto fail;
+--- 1785,1791 ----
+  # else
+    int  size = ((CmmObject *)cp)->words();
+  # endif
+!   page pagen = GCPtoPage(cp);
+    int error = 0;
+  
+    if  FORWARDED(cp[-HEADER_SIZE])  goto fail;
+***************
+*** 1832,1838 ****
+      int pages = pageGroup[page];
+      if (pages < 0) pages = pageGroup[page+pages];
+  #   endif
+!     Page pagex = pagen;
+      while (--pages)  {
+        pagex++;
+        if (pagex > lastHeapPage  ||
+--- 1804,1810 ----
+      int pages = pageGroup[page];
+      if (pages < 0) pages = pageGroup[page+pages];
+  #   endif
+!     page pagex = pagen;
+      while (--pages)  {
+        pagex++;
+        if (pagex > lastHeapPage  ||
+***************
+*** 1865,1871 ****
+  static void
+  logRoot(long* fp)
+  {
+!   Page  page = GCPtoPage(fp);
+  
+    if (page < firstHeapPage
+        || page > lastHeapPage
+--- 1837,1843 ----
+  static void
+  logRoot(long* fp)
+  {
+!   page  page = GCPtoPage(fp);
+  
+    if (page < firstHeapPage
+        || page > lastHeapPage
+***************
+*** 1904,1917 ****
+  
+  
+  /*---------------------------------------------------------------------------*
+!  * -- UncollectedHeap::scanRoots(Page page)
+   *
+   * Promotes pages referred by any allocated object inside "page".
+   * (Should be) Used by DefaultHeap to identify pointers from UncollectedHeap.
+   *
+   *---------------------------------------------------------------------------*/
+  void
+! UncollectedHeap::scanRoots(Page page)
+  {
+    GCP start = pageToGCP(page);
+    GCP end = pageToGCP(page + 1);
+--- 1876,1889 ----
+  
+  
+  /*---------------------------------------------------------------------------*
+!  * -- UncollectedHeap::scanRoots(int page)
+   *
+   * Promotes pages referred by any allocated object inside "page".
+   * (Should be) Used by DefaultHeap to identify pointers from UncollectedHeap.
+   *
+   *---------------------------------------------------------------------------*/
+  void
+! UncollectedHeap::scanRoots(page page)
+  {
+    GCP start = pageToGCP(page);
+    GCP end = pageToGCP(page + 1);
+diff -c /home/omega/attardi/posso/cmm/cmm.h /project/posso/cmm/curr/cmm/cmm.h
+*** /home/omega/attardi/posso/cmm/cmm.h	Mon Dec 23 12:21:01 1996
+--- /project/posso/cmm/curr/cmm/cmm.h	Wed Dec 18 17:35:47 1996
+***************
+*** 169,175 ****
+     Pointers to garbage collected objects MAY NOT be stored in dynamically
+     allocated objects that are not garbage collected, UNLESS one has specified
+     the CMM_HEAPROOTS flag in a Cmm declaration, OR declared that region as
+!    a root via a call to registerRootArea().
+  
+     Pointers to garbage collected objects contained in garbage collected objects
+     MUST always point outside the garbage collected heap or to a garbage
+--- 169,175 ----
+     Pointers to garbage collected objects MAY NOT be stored in dynamically
+     allocated objects that are not garbage collected, UNLESS one has specified
+     the CMM_HEAPROOTS flag in a Cmm declaration, OR declared that region as
+!    a root via a call to gcRoots.
+  
+     Pointers to garbage collected objects contained in garbage collected objects
+     MUST always point outside the garbage collected heap or to a garbage
+***************
+*** 363,368 ****
+--- 363,378 ----
+  #define VirtualBase(A) &(P ## A)
+  #endif
+  
++ /*---------------------------------------------------------------------------*
++  *
++  * Additional roots may be registered with the garbage collector by calling
++  * the procedure gcRoots with a pointer to the area and the size of the area.
++  *
++  *---------------------------------------------------------------------------*/
++ 
++ extern void  gcRoots(void *area, int bytes);
++ extern void  gcUnroots(void *addr);
++ 
+  /* Verbosity levels:							*/
+  const	CMM_STATS    =   1;	/* Log garbage collector info		*/
+  const	CMM_ROOTLOG  =   2;	/* Log roots found in registers, stack
+***************
+*** 415,432 ****
+   * object and an offset.
+   */
+  
+! extern Page	firstHeapPage;	/* Page # of first heap page		*/
+! extern Page	lastHeapPage;	/* Page # of last heap page		*/
+! extern Page	firstFreePage;	/* First possible free page		*/
+  extern unsigned long *objectMap; /* Bitmap of 1st words of user objects	*/
+  #if !HEADER_SIZE || defined(MARKING)
+  extern unsigned long *liveMap;	/* Bitmap of objects reached during GC	*/
+  #endif
+  extern short *pageSpace;	/* Space number for each page		*/
+  extern short *pageGroup;	/* Size of group of pages		*/
+! extern Page  *pageLink;		/* Page link for each page		*/
+  extern CmmHeap **pageHeap;	/* Heap to which each page belongs	*/
+  extern int   tablePages;	/* # of pages used by tables		*/
+  extern int   freePages;		/* # of pages not yet allocated		*/
+  
+  
+--- 425,443 ----
+   * object and an offset.
+   */
+  
+! extern page	firstHeapPage;	/* Page # of first heap page		*/
+! extern page	lastHeapPage;	/* Page # of last heap page		*/
+! extern page	firstFreePage;	/* First possible free page		*/
+  extern unsigned long *objectMap; /* Bitmap of 1st words of user objects	*/
+  #if !HEADER_SIZE || defined(MARKING)
+  extern unsigned long *liveMap;	/* Bitmap of objects reached during GC	*/
+  #endif
+  extern short *pageSpace;	/* Space number for each page		*/
+  extern short *pageGroup;	/* Size of group of pages		*/
+! extern page  *pageLink;		/* Page link for each page		*/
+  extern CmmHeap **pageHeap;	/* Heap to which each page belongs	*/
+  extern int   tablePages;	/* # of pages used by tables		*/
++ extern page  firstTablePage;	/* index of first page used by table	*/
+  extern int   freePages;		/* # of pages not yet allocated		*/
+  
+  
+***************
+*** 545,551 ****
+    static CmmHeap *heap;
+    static CmmHeap *theMSHeap;
+    static char*  version;
+!   static int  verbose;
+    static int  minHeap;		/* # of bytes of initial heap	*/
+    static int  maxHeap;		/* # of bytes of the final heap */
+    static int  incHeap;		/* # of bytes of each increment */
+--- 556,562 ----
+    static CmmHeap *heap;
+    static CmmHeap *theMSHeap;
+    static char*  version;
+!   static int verbose;
+    static int  minHeap;		/* # of bytes of initial heap	*/
+    static int  maxHeap;		/* # of bytes of the final heap */
+    static int  incHeap;		/* # of bytes of each increment */
+***************
+*** 557,563 ****
+    static bool created;		/* boolean indicating heap created */
+  };
+  
+- 
+  /*---------------------------------------------------------------------------*
+   *
+   * -- Heaps
+--- 568,573 ----
+***************
+*** 570,582 ****
+  
+    CmmHeap()
+      {
+-       reservedPages = 0;
+        opaque = false;
+      }
+  
+    virtual GCP   alloc(unsigned long) = 0;
+    virtual void  reclaim(GCP) {};
+!   virtual void  scanRoots(int) {};
+  
+    virtual void collect()
+      {
+--- 580,591 ----
+  
+    CmmHeap()
+      {
+        opaque = false;
+      }
+  
+    virtual GCP   alloc(unsigned long) = 0;
+    virtual void  reclaim(GCP) {};
+!   virtual void  scanRoots (int) {};
+  
+    virtual void collect()
+      {
+***************
+*** 587,593 ****
+  
+    inline bool inside(GCP ptr)
+      {
+!       Page page = GCPtoPage(ptr); // Page number
+        return (page >= firstHeapPage && page <= lastHeapPage
+  	      && pageHeap[page] == this);
+      }
+--- 596,602 ----
+  
+    inline bool inside(GCP ptr)
+      {
+!       page page = GCPtoPage(ptr); /* Page number */
+        return (page >= firstHeapPage && page <= lastHeapPage
+  	      && pageHeap[page] == this);
+      }
+***************
+*** 595,607 ****
+    inline void visit(CmmObject *); // defined later, after CmmObject
+  
+    inline bool isOpaque() { return opaque; }
+!   inline void setOpaque(bool opacity) { opaque = opacity; }
+! 
+!   int reservedPages;		// pages reserved for this heap
+  
+   private:
+!   bool opaque;			// controls whether collectors for other heaps
+! 				// should traverse this heap
+  };
+  
+  
+--- 604,616 ----
+    inline void visit(CmmObject *); // defined later, after CmmObject
+  
+    inline bool isOpaque() { return opaque; }
+!   inline void setOpaque(bool opacity)
+!     { opaque = opacity; }
+  
+   private:
+!   bool opaque;			/* controls whether collectors for other heaps
+! 				 * should traverse this heap
+! 				 */
+  };
+  
+  
+***************
+*** 618,627 ****
+    GCP alloc(unsigned long size) { return (GCP)malloc(size); }
+  
+    void reclaim(GCP ptr) { free(ptr); }
+!   void scanRoots	(Page page);
+  };
+  
+  
+  /*---------------------------------------------------------------------------*
+   *
+   * -- The DefaultHeap
+--- 627,639 ----
+    GCP alloc(unsigned long size) { return (GCP)malloc(size); }
+  
+    void reclaim(GCP ptr) { free(ptr); }
+!   void scanRoots	(page page);
+  };
+  
+  
++ CmmObject *basePointer(GCP);
++ 
++ 
+  /*---------------------------------------------------------------------------*
+   *
+   * -- The DefaultHeap
+***************
+*** 640,649 ****
+    GCP  getPages(int);
+  
+    int usedPages;		// pages in actual use
+    int stablePages;		// # of pages in the stable set
+!   Page firstUnusedPage;		// where to start looking for unused pages
+!   Page firstReservedPage;	// first page used by this Heap
+!   Page lastReservedPage;	// last page used by this Heap
+  };
+  
+  /*---------------------------------------------------------------------------*
+--- 652,662 ----
+    GCP  getPages(int);
+  
+    int usedPages;		// pages in actual use
++   int reservedPages;		// pages reserved for this heap
+    int stablePages;		// # of pages in the stable set
+!   page firstUnusedPage;		// where to start looking for unused pages
+!   page firstReservedPage;	// first page used by this Heap
+!   page lastReservedPage;	// last page used by this Heap
+  };
+  
+  /*---------------------------------------------------------------------------*
+***************
+*** 657,663 ****
+  
+   public:
+  
+-   MarkAndSweep();
+    inline GCP 		alloc	(unsigned long size)
+    					       { return (GCP) mswAlloc(size); }
+    inline void 		reclaim	(GCP p)        { mswFree(p); }
+--- 670,675 ----
+***************
+*** 670,680 ****
+    inline void		checkHeap()		{ mswCheckHeap(1); }
+    inline void		showInfo()		{ mswShowInfo(); }
+  
+    void			tempHeapStart ()	{ mswTempHeapStart(); }
+    void			tempHeapEnd   ()	{ mswTempHeapEnd(); }
+    void			tempHeapFree  ()	{ mswTempHeapFree(); }
+  
+!   void			scanRoots(Page page);
+  
+  };
+  
+--- 682,699 ----
+    inline void		checkHeap()		{ mswCheckHeap(1); }
+    inline void		showInfo()		{ mswShowInfo(); }
+  
++   MarkAndSweep()
++     {
++       mswInit();
++     }
++ 
+    void			tempHeapStart ()	{ mswTempHeapStart(); }
+    void			tempHeapEnd   ()	{ mswTempHeapEnd(); }
+    void			tempHeapFree  ()	{ mswTempHeapFree(); }
++   void			tempHeapRegisterRoot (void* ptr)
++   					{ mswRegisterRoot(ptr); }
+  
+!   void			scanRoots(page page);
+  
+  };
+  
+***************
+*** 821,829 ****
+  #endif
+  }
+  
+- CmmObject *basePointer(GCP);
+- 
+- 
+  /*---------------------------------------------------------------------------*
+   *
+   * -- Library initialization
+--- 840,845 ----
+***************
+*** 847,852 ****
+--- 863,869 ----
+  	Cmm::heap = Cmm::theDefaultHeap;
+        }
+      }
++   ~_CmmInit() {};		// destroy _DummyCmmInit after loading cmm.h
+  };
+  
+  /*---------------------------------------------------------------------------*
+***************
+*** 857,948 ****
+  #define GcVarObject	CmmVarObject
+  #define GcArray		CmmArray
+  
+- 
+- /*---------------------------------------------------------------------------*
+-  *
+-  * -- Set
+-  *
+-  *---------------------------------------------------------------------------*/
+- 
+- template <class T>
+- class Set
+- {
+-  public:
+-   Set()
+-     {
+-       last = 0;
+-       max = 0;
+-       free = 0;
+-       iter = 0;
+-     }
+- 
+-   void insert(T* entry)
+-     {
+- #     define	    setIncrement 10
+- 
+-       if (free)
+- 	{
+- 	  for (int i = 0; i < last; i++)
+- 	    if (entries[i] == NULL)
+- 	      {
+- 		entries[i] = entry;
+- 		free--;
+- 		return;
+- 	      }
+- 	}
+-       if (last == max)
+- 	{
+- 	  T** np;
+- 	  int i;
+- 	  max += setIncrement;
+- 	  np = new T*[max];
+- 	  for (i = 0; i < last; i++)
+- 	    np[i] = entries[i];
+- 	  delete  entries;
+- 	  entries = np;
+- 	  // clear the rest
+- 	  for (; i < max; i++)
+- 	    entries[i] = NULL;
+- 	}
+-       entries[last++] = entry;
+-     }
+- 
+-   void erase(T* entry)
+-     {
+-       int i;
+- 
+-       for (i = 0; i < last; i++)
+- 	if (entries[i] == entry)
+- 	  {
+- 	    entries[i] = NULL;
+- 	    free++;
+- 	    return;
+- 	  }
+-       assert(i < last);
+-     }
+- 
+-   T* get()
+-     {
+-       // look for a non empty entry
+-       while (iter < max)
+- 	{
+- 	  if (entries[iter])
+- 	    return entries[iter++];
+- 	  else
+- 	    iter++;
+- 	}
+-       // No more entries;
+-       return (T*)NULL;
+-     }
+- 
+-   void begin() { iter = 0;}
+- 
+-   int  last;
+-   T**  entries;
+-   
+- private:
+-   int  max;
+-   int  free;
+-   int  iter;
+- };
+  #endif				// _CMM_H
+--- 874,877 ----
+diff -c /home/omega/attardi/posso/cmm/cmm.mak /project/posso/cmm/curr/cmm/cmm.mak
+*** /home/omega/attardi/posso/cmm/cmm.mak	Wed Dec 18 20:19:04 1996
+--- /project/posso/cmm/curr/cmm/cmm.mak	Sun Dec 15 20:57:10 1996
+***************
+*** 11,19 ****
+  
+  !IF "$(CFG)" != "cmm - Win32 Release" && "$(CFG)" != "cmm - Win32 Debug" &&\
+   "$(CFG)" != "lib - Win32 Release" && "$(CFG)" != "lib - Win32 Debug" &&\
+!  "$(CFG)" != "test2 - Win32 Debug" && "$(CFG)" != "test3 - Win32 Debug" &&\
+!  "$(CFG)" != "test4 - Win32 Debug" && "$(CFG)" != "test5 - Win32 Debug" &&\
+!  "$(CFG)" != "test6 - Win32 Debug"
+  !MESSAGE Invalid configuration "$(CFG)" specified.
+  !MESSAGE You can specify a configuration when running NMAKE on this makefile
+  !MESSAGE by defining the macro CFG on the command line.  For example:
+--- 11,21 ----
+  
+  !IF "$(CFG)" != "cmm - Win32 Release" && "$(CFG)" != "cmm - Win32 Debug" &&\
+   "$(CFG)" != "lib - Win32 Release" && "$(CFG)" != "lib - Win32 Debug" &&\
+!  "$(CFG)" != "test2 - Win32 Release" && "$(CFG)" != "test2 - Win32 Debug" &&\
+!  "$(CFG)" != "test3 - Win32 Release" && "$(CFG)" != "test3 - Win32 Debug" &&\
+!  "$(CFG)" != "test4 - Win32 Release" && "$(CFG)" != "test4 - Win32 Debug" &&\
+!  "$(CFG)" != "test5 - Win32 Release" && "$(CFG)" != "test5 - Win32 Debug" &&\
+!  "$(CFG)" != "test6 - Win32 Release" && "$(CFG)" != "test6 - Win32 Debug"
+  !MESSAGE Invalid configuration "$(CFG)" specified.
+  !MESSAGE You can specify a configuration when running NMAKE on this makefile
+  !MESSAGE by defining the macro CFG on the command line.  For example:
+***************
+*** 26,35 ****
+--- 28,42 ----
+  !MESSAGE "cmm - Win32 Debug" (based on "Win32 (x86) Static Library")
+  !MESSAGE "lib - Win32 Release" (based on "Win32 (x86) Static Library")
+  !MESSAGE "lib - Win32 Debug" (based on "Win32 (x86) Static Library")
++ !MESSAGE "test2 - Win32 Release" (based on "Win32 (x86) Console Application")
+  !MESSAGE "test2 - Win32 Debug" (based on "Win32 (x86) Console Application")
++ !MESSAGE "test3 - Win32 Release" (based on "Win32 (x86) Console Application")
+  !MESSAGE "test3 - Win32 Debug" (based on "Win32 (x86) Console Application")
++ !MESSAGE "test4 - Win32 Release" (based on "Win32 (x86) Console Application")
+  !MESSAGE "test4 - Win32 Debug" (based on "Win32 (x86) Console Application")
++ !MESSAGE "test5 - Win32 Release" (based on "Win32 (x86) Console Application")
+  !MESSAGE "test5 - Win32 Debug" (based on "Win32 (x86) Console Application")
++ !MESSAGE "test6 - Win32 Release" (based on "Win32 (x86) Console Application")
+  !MESSAGE "test6 - Win32 Debug" (based on "Win32 (x86) Console Application")
+  !MESSAGE 
+  !ERROR An invalid configuration is specified.
+***************
+*** 59,65 ****
+  OUTDIR=.\Release
+  INTDIR=.\Release
+  
+! ALL : "lib - Win32 Release" 
+  
+  CLEAN : 
+  	-@erase 
+--- 66,73 ----
+  OUTDIR=.\Release
+  INTDIR=.\Release
+  
+! ALL : "test6 - Win32 Release" "test5 - Win32 Release" "test4 - Win32 Release"\
+!  "test3 - Win32 Release" "test2 - Win32 Release" "lib - Win32 Release" 
+  
+  CLEAN : 
+  	-@erase 
+***************
+*** 185,193 ****
+  CLEAN : 
+  	-@erase ".\Release\cmm.lib"
+  	-@erase ".\Release\memory.obj"
+- 	-@erase ".\Release\tempheap.obj"
+  	-@erase ".\Release\cmm.obj"
+  	-@erase ".\Release\msw.obj"
+  
+  "$(OUTDIR)" :
+      if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+--- 193,201 ----
+  CLEAN : 
+  	-@erase ".\Release\cmm.lib"
+  	-@erase ".\Release\memory.obj"
+  	-@erase ".\Release\cmm.obj"
+  	-@erase ".\Release\msw.obj"
++ 	-@erase ".\Release\tempheap.obj"
+  
+  "$(OUTDIR)" :
+      if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+***************
+*** 229,237 ****
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+  	"$(INTDIR)/memory.obj" \
+- 	"$(INTDIR)/tempheap.obj" \
+  	"$(INTDIR)/cmm.obj" \
+! 	"$(INTDIR)/msw.obj"
+  
+  "$(OUTDIR)\cmm.lib" : "$(OUTDIR)" $(DEF_FILE) $(LIB32_OBJS)
+      $(LIB32) @<<
+--- 237,245 ----
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+  	"$(INTDIR)/memory.obj" \
+  	"$(INTDIR)/cmm.obj" \
+! 	"$(INTDIR)/msw.obj" \
+! 	"$(INTDIR)/tempheap.obj"
+  
+  "$(OUTDIR)\cmm.lib" : "$(OUTDIR)" $(DEF_FILE) $(LIB32_OBJS)
+      $(LIB32) @<<
+***************
+*** 258,266 ****
+  CLEAN : 
+  	-@erase ".\Debug\cmm.lib"
+  	-@erase ".\Debug\memory.obj"
+  	-@erase ".\Debug\cmm.obj"
+  	-@erase ".\Debug\msw.obj"
+- 	-@erase ".\Debug\tempheap.obj"
+  
+  "$(OUTDIR)" :
+      if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+--- 266,274 ----
+  CLEAN : 
+  	-@erase ".\Debug\cmm.lib"
+  	-@erase ".\Debug\memory.obj"
++ 	-@erase ".\Debug\tempheap.obj"
+  	-@erase ".\Debug\cmm.obj"
+  	-@erase ".\Debug\msw.obj"
+  
+  "$(OUTDIR)" :
+      if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+***************
+*** 302,316 ****
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+  	"$(INTDIR)/memory.obj" \
+  	"$(INTDIR)/cmm.obj" \
+! 	"$(INTDIR)/msw.obj" \
+! 	"$(INTDIR)/tempheap.obj"
+  
+  "$(OUTDIR)\cmm.lib" : "$(OUTDIR)" $(DEF_FILE) $(LIB32_OBJS)
+      $(LIB32) @<<
+    $(LIB32_FLAGS) $(DEF_FLAGS) $(LIB32_OBJS)
+  <<
+  
+  !ELSEIF  "$(CFG)" == "test2 - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+--- 310,398 ----
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+  	"$(INTDIR)/memory.obj" \
++ 	"$(INTDIR)/tempheap.obj" \
+  	"$(INTDIR)/cmm.obj" \
+! 	"$(INTDIR)/msw.obj"
+  
+  "$(OUTDIR)\cmm.lib" : "$(OUTDIR)" $(DEF_FILE) $(LIB32_OBJS)
+      $(LIB32) @<<
+    $(LIB32_FLAGS) $(DEF_FLAGS) $(LIB32_OBJS)
+  <<
+  
++ !ELSEIF  "$(CFG)" == "test2 - Win32 Release"
++ 
++ # PROP BASE Use_MFC 0
++ # PROP BASE Use_Debug_Libraries 0
++ # PROP BASE Output_Dir "test2\Release"
++ # PROP BASE Intermediate_Dir "test2\Release"
++ # PROP BASE Target_Dir "test2"
++ # PROP Use_MFC 0
++ # PROP Use_Debug_Libraries 0
++ # PROP Output_Dir "Release"
++ # PROP Intermediate_Dir "Release"
++ # PROP Target_Dir "test2"
++ OUTDIR=.\Release
++ INTDIR=.\Release
++ 
++ ALL : "lib - Win32 Release" "$(OUTDIR)\test2.exe"
++ 
++ CLEAN : 
++ 	-@erase ".\Release\test2.exe"
++ 	-@erase ".\Release\test2.obj"
++ 
++ "$(OUTDIR)" :
++     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
++ 
++ CPP=cl.exe
++ # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE"\
++  /Fp"$(INTDIR)/test2.pch" /YX /Fo"$(INTDIR)/" /c 
++ CPP_OBJS=.\Release/
++ CPP_SBRS=
++ 
++ .c{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .c{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ RSC=rc.exe
++ # ADD BASE RSC /l 0x410 /d "NDEBUG"
++ # ADD RSC /l 0x409 /d "NDEBUG"
++ BSC32=bscmake.exe
++ # ADD BASE BSC32 /nologo
++ # ADD BSC32 /nologo
++ BSC32_FLAGS=/nologo /o"$(OUTDIR)/test2.bsc" 
++ BSC32_SBRS=
++ LINK32=link.exe
++ # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
++  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
++  odbccp32.lib /nologo /subsystem:console /incremental:no\
++  /pdb:"$(OUTDIR)/test2.pdb" /machine:I386 /out:"$(OUTDIR)/test2.exe" 
++ LINK32_OBJS= \
++ 	"$(INTDIR)/test2.obj" \
++ 	".\Release\cmm.lib"
++ 
++ "$(OUTDIR)\test2.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
++     $(LINK32) @<<
++   $(LINK32_FLAGS) $(LINK32_OBJS)
++ <<
++ 
+  !ELSEIF  "$(CFG)" == "test2 - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+***************
+*** 389,394 ****
+--- 471,550 ----
+    $(LINK32_FLAGS) $(LINK32_OBJS)
+  <<
+  
++ !ELSEIF  "$(CFG)" == "test3 - Win32 Release"
++ 
++ # PROP BASE Use_MFC 0
++ # PROP BASE Use_Debug_Libraries 0
++ # PROP BASE Output_Dir "test3\Release"
++ # PROP BASE Intermediate_Dir "test3\Release"
++ # PROP BASE Target_Dir "test3"
++ # PROP Use_MFC 0
++ # PROP Use_Debug_Libraries 0
++ # PROP Output_Dir "Release"
++ # PROP Intermediate_Dir "Release"
++ # PROP Target_Dir "test3"
++ OUTDIR=.\Release
++ INTDIR=.\Release
++ 
++ ALL : "lib - Win32 Release" "$(OUTDIR)\test3.exe"
++ 
++ CLEAN : 
++ 	-@erase ".\Release\test3.exe"
++ 	-@erase ".\Release\test3.obj"
++ 
++ "$(OUTDIR)" :
++     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
++ 
++ CPP=cl.exe
++ # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE"\
++  /Fp"$(INTDIR)/test3.pch" /YX /Fo"$(INTDIR)/" /c 
++ CPP_OBJS=.\Release/
++ CPP_SBRS=
++ 
++ .c{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .c{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ RSC=rc.exe
++ # ADD BASE RSC /l 0x410 /d "NDEBUG"
++ # ADD RSC /l 0x409 /d "NDEBUG"
++ BSC32=bscmake.exe
++ # ADD BASE BSC32 /nologo
++ # ADD BSC32 /nologo
++ BSC32_FLAGS=/nologo /o"$(OUTDIR)/test3.bsc" 
++ BSC32_SBRS=
++ LINK32=link.exe
++ # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
++  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
++  odbccp32.lib /nologo /subsystem:console /incremental:no\
++  /pdb:"$(OUTDIR)/test3.pdb" /machine:I386 /out:"$(OUTDIR)/test3.exe" 
++ LINK32_OBJS= \
++ 	"$(INTDIR)/test3.obj" \
++ 	".\Release\cmm.lib"
++ 
++ "$(OUTDIR)\test3.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
++     $(LINK32) @<<
++   $(LINK32_FLAGS) $(LINK32_OBJS)
++ <<
++ 
+  !ELSEIF  "$(CFG)" == "test3 - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+***************
+*** 467,472 ****
+--- 623,702 ----
+    $(LINK32_FLAGS) $(LINK32_OBJS)
+  <<
+  
++ !ELSEIF  "$(CFG)" == "test4 - Win32 Release"
++ 
++ # PROP BASE Use_MFC 0
++ # PROP BASE Use_Debug_Libraries 0
++ # PROP BASE Output_Dir "test4\Release"
++ # PROP BASE Intermediate_Dir "test4\Release"
++ # PROP BASE Target_Dir "test4"
++ # PROP Use_MFC 0
++ # PROP Use_Debug_Libraries 0
++ # PROP Output_Dir "Release"
++ # PROP Intermediate_Dir "Release"
++ # PROP Target_Dir "test4"
++ OUTDIR=.\Release
++ INTDIR=.\Release
++ 
++ ALL : "lib - Win32 Release" "$(OUTDIR)\test4.exe"
++ 
++ CLEAN : 
++ 	-@erase ".\Release\test4.exe"
++ 	-@erase ".\Release\test4.obj"
++ 
++ "$(OUTDIR)" :
++     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
++ 
++ CPP=cl.exe
++ # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE"\
++  /Fp"$(INTDIR)/test4.pch" /YX /Fo"$(INTDIR)/" /c 
++ CPP_OBJS=.\Release/
++ CPP_SBRS=
++ 
++ .c{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .c{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ RSC=rc.exe
++ # ADD BASE RSC /l 0x410 /d "NDEBUG"
++ # ADD RSC /l 0x409 /d "NDEBUG"
++ BSC32=bscmake.exe
++ # ADD BASE BSC32 /nologo
++ # ADD BSC32 /nologo
++ BSC32_FLAGS=/nologo /o"$(OUTDIR)/test4.bsc" 
++ BSC32_SBRS=
++ LINK32=link.exe
++ # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
++  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
++  odbccp32.lib /nologo /subsystem:console /incremental:no\
++  /pdb:"$(OUTDIR)/test4.pdb" /machine:I386 /out:"$(OUTDIR)/test4.exe" 
++ LINK32_OBJS= \
++ 	"$(INTDIR)/test4.obj" \
++ 	".\Release\cmm.lib"
++ 
++ "$(OUTDIR)\test4.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
++     $(LINK32) @<<
++   $(LINK32_FLAGS) $(LINK32_OBJS)
++ <<
++ 
+  !ELSEIF  "$(CFG)" == "test4 - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+***************
+*** 545,550 ****
+--- 775,854 ----
+    $(LINK32_FLAGS) $(LINK32_OBJS)
+  <<
+  
++ !ELSEIF  "$(CFG)" == "test5 - Win32 Release"
++ 
++ # PROP BASE Use_MFC 0
++ # PROP BASE Use_Debug_Libraries 0
++ # PROP BASE Output_Dir "test5\Release"
++ # PROP BASE Intermediate_Dir "test5\Release"
++ # PROP BASE Target_Dir "test5"
++ # PROP Use_MFC 0
++ # PROP Use_Debug_Libraries 0
++ # PROP Output_Dir "Release"
++ # PROP Intermediate_Dir "Release"
++ # PROP Target_Dir "test5"
++ OUTDIR=.\Release
++ INTDIR=.\Release
++ 
++ ALL : "lib - Win32 Release" "$(OUTDIR)\test5.exe"
++ 
++ CLEAN : 
++ 	-@erase ".\Release\test5.exe"
++ 	-@erase ".\Release\test5.obj"
++ 
++ "$(OUTDIR)" :
++     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
++ 
++ CPP=cl.exe
++ # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE"\
++  /Fp"$(INTDIR)/test5.pch" /YX /Fo"$(INTDIR)/" /c 
++ CPP_OBJS=.\Release/
++ CPP_SBRS=
++ 
++ .c{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .c{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ RSC=rc.exe
++ # ADD BASE RSC /l 0x410 /d "NDEBUG"
++ # ADD RSC /l 0x409 /d "NDEBUG"
++ BSC32=bscmake.exe
++ # ADD BASE BSC32 /nologo
++ # ADD BSC32 /nologo
++ BSC32_FLAGS=/nologo /o"$(OUTDIR)/test5.bsc" 
++ BSC32_SBRS=
++ LINK32=link.exe
++ # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
++  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
++  odbccp32.lib /nologo /subsystem:console /incremental:no\
++  /pdb:"$(OUTDIR)/test5.pdb" /machine:I386 /out:"$(OUTDIR)/test5.exe" 
++ LINK32_OBJS= \
++ 	"$(INTDIR)/test5.obj" \
++ 	".\Release\cmm.lib"
++ 
++ "$(OUTDIR)\test5.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
++     $(LINK32) @<<
++   $(LINK32_FLAGS) $(LINK32_OBJS)
++ <<
++ 
+  !ELSEIF  "$(CFG)" == "test5 - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+***************
+*** 623,628 ****
+--- 927,1006 ----
+    $(LINK32_FLAGS) $(LINK32_OBJS)
+  <<
+  
++ !ELSEIF  "$(CFG)" == "test6 - Win32 Release"
++ 
++ # PROP BASE Use_MFC 0
++ # PROP BASE Use_Debug_Libraries 0
++ # PROP BASE Output_Dir "test6\Release"
++ # PROP BASE Intermediate_Dir "test6\Release"
++ # PROP BASE Target_Dir "test6"
++ # PROP Use_MFC 0
++ # PROP Use_Debug_Libraries 0
++ # PROP Output_Dir "Release"
++ # PROP Intermediate_Dir "Release"
++ # PROP Target_Dir "test6"
++ OUTDIR=.\Release
++ INTDIR=.\Release
++ 
++ ALL : "lib - Win32 Release" "$(OUTDIR)\test6.exe"
++ 
++ CLEAN : 
++ 	-@erase ".\Release\test6.exe"
++ 	-@erase ".\Release\test6.obj"
++ 
++ "$(OUTDIR)" :
++     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
++ 
++ CPP=cl.exe
++ # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE" /YX /c
++ CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_CONSOLE"\
++  /Fp"$(INTDIR)/test6.pch" /YX /Fo"$(INTDIR)/" /c 
++ CPP_OBJS=.\Release/
++ CPP_SBRS=
++ 
++ .c{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_OBJS)}.obj:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .c{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cpp{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ .cxx{$(CPP_SBRS)}.sbr:
++    $(CPP) $(CPP_PROJ) $<  
++ 
++ RSC=rc.exe
++ # ADD BASE RSC /l 0x410 /d "NDEBUG"
++ # ADD RSC /l 0x409 /d "NDEBUG"
++ BSC32=bscmake.exe
++ # ADD BASE BSC32 /nologo
++ # ADD BSC32 /nologo
++ BSC32_FLAGS=/nologo /o"$(OUTDIR)/test6.bsc" 
++ BSC32_SBRS=
++ LINK32=link.exe
++ # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /machine:I386
++ LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
++  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
++  odbccp32.lib /nologo /subsystem:console /incremental:no\
++  /pdb:"$(OUTDIR)/test6.pdb" /machine:I386 /out:"$(OUTDIR)/test6.exe" 
++ LINK32_OBJS= \
++ 	"$(INTDIR)/test6.obj" \
++ 	".\Release\cmm.lib"
++ 
++ "$(OUTDIR)\test6.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
++     $(LINK32) @<<
++   $(LINK32_FLAGS) $(LINK32_OBJS)
++ <<
++ 
+  !ELSEIF  "$(CFG)" == "test6 - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+***************
+*** 740,745 ****
+--- 1118,1126 ----
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
++ "test2 - Win32 Release" : 
++    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test2 - Win32 Release" 
++ 
+  !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  "test2 - Win32 Debug" : 
+***************
+*** 755,760 ****
+--- 1136,1144 ----
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
++ "test3 - Win32 Release" : 
++    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test3 - Win32 Release" 
++ 
+  !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  "test3 - Win32 Debug" : 
+***************
+*** 770,775 ****
+--- 1154,1162 ----
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
++ "test4 - Win32 Release" : 
++    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test4 - Win32 Release" 
++ 
+  !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  "test4 - Win32 Debug" : 
+***************
+*** 785,790 ****
+--- 1172,1180 ----
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
++ "test5 - Win32 Release" : 
++    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test5 - Win32 Release" 
++ 
+  !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  "test5 - Win32 Debug" : 
+***************
+*** 800,805 ****
+--- 1190,1198 ----
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
++ "test6 - Win32 Release" : 
++    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test6 - Win32 Release" 
++ 
+  !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  "test6 - Win32 Debug" : 
+***************
+*** 861,866 ****
+--- 1254,1262 ----
+  # Begin Source File
+  
+  SOURCE=.\msw.cpp
++ 
++ !IF  "$(CFG)" == "lib - Win32 Release"
++ 
+  DEP_CPP_MSW_C=\
+  	".\cmm.h"\
+  	{$(INCLUDE)}"\sys\Types.h"\
+***************
+*** 871,876 ****
+--- 1267,1286 ----
+  "$(INTDIR)\msw.obj" : $(SOURCE) $(DEP_CPP_MSW_C) "$(INTDIR)"
+  
+  
++ !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
++ 
++ DEP_CPP_MSW_C=\
++ 	".\cmm.h"\
++ 	{$(INCLUDE)}"\sys\Types.h"\
++ 	".\machine.h"\
++ 	".\msw.h"\
++ 	
++ 
++ "$(INTDIR)\msw.obj" : $(SOURCE) $(DEP_CPP_MSW_C) "$(INTDIR)"
++ 
++ 
++ !ENDIF 
++ 
+  # End Source File
+  ################################################################################
+  # Begin Source File
+***************
+*** 888,893 ****
+--- 1298,1318 ----
+  # Begin Source File
+  
+  SOURCE=.\tempheap.cpp
++ 
++ !IF  "$(CFG)" == "lib - Win32 Release"
++ 
++ DEP_CPP_TEMPH=\
++ 	".\tempheap.h"\
++ 	".\cmm.h"\
++ 	".\machine.h"\
++ 	".\msw.h"\
++ 	
++ 
++ "$(INTDIR)\tempheap.obj" : $(SOURCE) $(DEP_CPP_TEMPH) "$(INTDIR)"
++ 
++ 
++ !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
++ 
+  DEP_CPP_TEMPH=\
+  	".\tempheap.h"\
+  	".\cmm.h"\
+***************
+*** 898,903 ****
+--- 1323,1330 ----
+  "$(INTDIR)\tempheap.obj" : $(SOURCE) $(DEP_CPP_TEMPH) "$(INTDIR)"
+  
+  
++ !ENDIF 
++ 
+  # End Source File
+  ################################################################################
+  # Begin Source File
+***************
+*** 966,978 ****
+  ################################################################################
+  # Begin Target
+  
+  # Name "test2 - Win32 Debug"
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test2 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+--- 1393,1418 ----
+  ################################################################################
+  # Begin Target
+  
++ # Name "test2 - Win32 Release"
+  # Name "test2 - Win32 Debug"
++ 
++ !IF  "$(CFG)" == "test2 - Win32 Release"
++ 
++ !ELSEIF  "$(CFG)" == "test2 - Win32 Debug"
++ 
++ !ENDIF 
++ 
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test2 - Win32 Release"
+! 
+! "lib - Win32 Release" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Release" 
+! 
+! !ELSEIF  "$(CFG)" == "test2 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+***************
+*** 998,1010 ****
+  ################################################################################
+  # Begin Target
+  
+  # Name "test3 - Win32 Debug"
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test3 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+--- 1438,1463 ----
+  ################################################################################
+  # Begin Target
+  
++ # Name "test3 - Win32 Release"
+  # Name "test3 - Win32 Debug"
++ 
++ !IF  "$(CFG)" == "test3 - Win32 Release"
++ 
++ !ELSEIF  "$(CFG)" == "test3 - Win32 Debug"
++ 
++ !ENDIF 
++ 
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test3 - Win32 Release"
+! 
+! "lib - Win32 Release" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Release" 
+! 
+! !ELSEIF  "$(CFG)" == "test3 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+***************
+*** 1030,1042 ****
+  ################################################################################
+  # Begin Target
+  
+  # Name "test4 - Win32 Debug"
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test4 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+--- 1483,1508 ----
+  ################################################################################
+  # Begin Target
+  
++ # Name "test4 - Win32 Release"
+  # Name "test4 - Win32 Debug"
++ 
++ !IF  "$(CFG)" == "test4 - Win32 Release"
++ 
++ !ELSEIF  "$(CFG)" == "test4 - Win32 Debug"
++ 
++ !ENDIF 
++ 
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test4 - Win32 Release"
+! 
+! "lib - Win32 Release" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Release" 
+! 
+! !ELSEIF  "$(CFG)" == "test4 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+***************
+*** 1051,1056 ****
+--- 1517,1523 ----
+  DEP_CPP_TEST4=\
+  	".\cmm.h"\
+  	".\machine.h"\
++ 	".\msw.h"\
+  	
+  
+  "$(INTDIR)\test4.obj" : $(SOURCE) $(DEP_CPP_TEST4) "$(INTDIR)"
+***************
+*** 1061,1073 ****
+  ################################################################################
+  # Begin Target
+  
+  # Name "test5 - Win32 Debug"
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test5 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+--- 1528,1553 ----
+  ################################################################################
+  # Begin Target
+  
++ # Name "test5 - Win32 Release"
+  # Name "test5 - Win32 Debug"
++ 
++ !IF  "$(CFG)" == "test5 - Win32 Release"
++ 
++ !ELSEIF  "$(CFG)" == "test5 - Win32 Debug"
++ 
++ !ENDIF 
++ 
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test5 - Win32 Release"
+! 
+! "lib - Win32 Release" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Release" 
+! 
+! !ELSEIF  "$(CFG)" == "test5 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+***************
+*** 1094,1106 ****
+  ################################################################################
+  # Begin Target
+  
+  # Name "test6 - Win32 Debug"
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test6 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+--- 1574,1599 ----
+  ################################################################################
+  # Begin Target
+  
++ # Name "test6 - Win32 Release"
+  # Name "test6 - Win32 Debug"
++ 
++ !IF  "$(CFG)" == "test6 - Win32 Release"
++ 
++ !ELSEIF  "$(CFG)" == "test6 - Win32 Debug"
++ 
++ !ENDIF 
++ 
+  ################################################################################
+  # Begin Project Dependency
+  
+  # Project_Dep_Name "lib"
+  
+! !IF  "$(CFG)" == "test6 - Win32 Release"
+! 
+! "lib - Win32 Release" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Release" 
+! 
+! !ELSEIF  "$(CFG)" == "test6 - Win32 Debug"
+  
+  "lib - Win32 Debug" : 
+     $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+Common subdirectories: /home/omega/attardi/posso/cmm/doc and /project/posso/cmm/curr/cmm/doc
+diff -c /home/omega/attardi/posso/cmm/machine.h /project/posso/cmm/curr/cmm/machine.h
+*** /home/omega/attardi/posso/cmm/machine.h	Sun Dec 22 10:05:18 1996
+--- /project/posso/cmm/curr/cmm/machine.h	Sun Dec 15 19:40:37 1996
+***************
+*** 47,53 ****
+  typedef unsigned long	Word;
+  typedef char *		Ptr;
+  typedef Ptr *		GCP;	/* Pointer to a garbage collected object */
+! typedef unsigned	Page;	/* Page number */
+  
+  /*---------------------------------------------------------------------------*
+   * -- Compatibility
+--- 47,53 ----
+  typedef unsigned long	Word;
+  typedef char *		Ptr;
+  typedef Ptr *		GCP;	/* Pointer to a garbage collected object */
+! typedef unsigned	page;	/* Page number */
+  
+  /*---------------------------------------------------------------------------*
+   * -- Compatibility
+diff -c /home/omega/attardi/posso/cmm/msw.cpp /project/posso/cmm/curr/cmm/msw.cpp
+*** /home/omega/attardi/posso/cmm/msw.cpp	Sun Dec 22 17:25:15 1996
+--- /project/posso/cmm/curr/cmm/msw.cpp	Wed Dec 18 20:45:17 1996
+***************
+*** 1,6 ****
+  /*****************************************************************************
+   *
+!  *  msw.cpp:	mark&sweep garbage collector for CMM.
+   *
+   *  version:    0.0.2 (30 Oct 96)
+   *  authors:	Pietro Iglio
+--- 1,6 ----
+  /*****************************************************************************
+   *
+!  *  msw.cpp: memory manager with mark&sweep garbage collection.
+   *
+   *  version:    0.0.2 (30 Oct 96)
+   *  authors:	Pietro Iglio
+***************
+*** 430,441 ****
+   *---------------------------------------------------------------------------*/
+  
+  
+! static PageHeader     mswAllocFPage	       (Word size);
+! static Ptr  	      mswAllocChunk	       (unsigned long, unsigned);
+! static Ptr  	      mswAllocPages	       (int nPages, Word size);
+  
+! static Ptr            mswGetPages	       (int nPages, Word size);
+! static PageHeader     mswSetupFPage	       (Ptr page, Word size);
+  
+  static void	      mswFreeChunk	       (PageHeader);
+  
+--- 430,441 ----
+   *---------------------------------------------------------------------------*/
+  
+  
+! static PageHeader     mswAllocFPage	     (Word size);
+! static Ptr  	      mswAllocChunk	     (unsigned long, unsigned);
+! static Ptr  	      mswAllocPages	     (int nPages, Word size);
+  
+! static Ptr            mswGetPages        (int nPages, Word size);
+! static PageHeader     mswSetupFPage      (Ptr page, Word size);
+  
+  static void	      mswFreeChunk	       (PageHeader);
+  
+***************
+*** 933,939 ****
+  void *
+  mswCalloc(unsigned long n, unsigned long size)
+  {
+! 	void * mem = mswAlloc(n * size);
+  
+  	return memset(mem, 0, n * size);
+  }
+--- 933,939 ----
+  void *
+  mswCalloc(unsigned long n, unsigned long size)
+  {
+! 	Ptr	mem = (Ptr) mswAlloc(n * size);
+  
+  	return memset(mem, 0, n * size);
+  }
+***************
+*** 1227,1235 ****
+  mswMergeChunkWithNeighbors(Ptr chunk, int* pNPages)
+  {
+  	int nPages    = *pNPages;
+! 	Page baseIndex = GCPtoPage(chunk);
+! 	Page limitIndex= GCPtoPage(heapEnd);
+! 	Page index     = baseIndex;
+  	Ptr newChunk  = chunk;
+  	FreePageHeader followChunk;
+  
+--- 1227,1235 ----
+  mswMergeChunkWithNeighbors(Ptr chunk, int* pNPages)
+  {
+  	int nPages    = *pNPages;
+! 	page baseIndex = GCPtoPage(chunk);
+! 	page limitIndex= GCPtoPage(heapEnd);
+! 	page index     = baseIndex;
+  	Ptr newChunk  = chunk;
+  	FreePageHeader followChunk;
+  
+***************
+*** 1951,1969 ****
+  
+  /*---------------------------------------------------------------------------*
+   *
+!  * :: MarkAndSweep()
+   *
+   *---------------------------------------------------------------------------*/
+  
+! MarkAndSweep::MarkAndSweep()
+  {
+  	extern  void	CmmInit(void);
+  	int 	i, j, k;
+  	Word	firstObjOff, bp = 0;
+  	Word	lastObjOff;
+  	Word    size1, counter;
+  
+! 	Cmm::theMSHeap = this;	// needed for allocatePages()
+  
+  	freeChunks = NULL;
+  
+--- 1951,1972 ----
+  
+  /*---------------------------------------------------------------------------*
+   *
+!  * :: mswInit()
+   *
+   *---------------------------------------------------------------------------*/
+  
+! void
+! mswInit()
+  {
+  	extern  void	CmmInit(void);
+  	int 	i, j, k;
+  	Word	firstObjOff, bp = 0;
+  	Word	lastObjOff;
+  	Word    size1, counter;
++ 	static  int initialized = 0;
+  
+! 	if (initialized) return;
+! 	initialized = 1;
+  
+  	freeChunks = NULL;
+  
+***************
+*** 2059,2065 ****
+  static void	scanMixedPageRoots(PageHeader);
+  
+  void
+! MarkAndSweep::scanRoots(Page page)
+  {
+  	unsigned pageInfo = PAGE_INFO(page);
+  	PageHeader header = (PageHeader)pageToGCP(page);
+--- 2062,2068 ----
+  static void	scanMixedPageRoots(PageHeader);
+  
+  void
+! MarkAndSweep::scanRoots(page page)
+  {
+  	unsigned pageInfo = PAGE_INFO(page);
+  	PageHeader header = (PageHeader)pageToGCP(page);
+***************
+*** 2130,2136 ****
+  static void
+  mswTempHeapFreePages(void)
+  {
+! 	Page	page;
+  	totReleasedPages = 0;
+  
+  	/* NOTE: the following loop is ugly because optimized */
+--- 2133,2139 ----
+  static void
+  mswTempHeapFreePages(void)
+  {
+! 	page	page;
+  	totReleasedPages = 0;
+  
+  	/* NOTE: the following loop is ugly because optimized */
+diff -c /home/omega/attardi/posso/cmm/msw.h /project/posso/cmm/curr/cmm/msw.h
+*** /home/omega/attardi/posso/cmm/msw.h	Sun Dec 22 10:01:41 1996
+--- /project/posso/cmm/curr/cmm/msw.h	Wed Oct 30 13:21:30 1996
+***************
+*** 1,10 ****
+  /*---------------------------------------------------------------------------*
+   *
+!  *  msw.h:	mark&sweep garbage collector for CMM.
+   *
+   *  date:	6 March 1995
+   *  authors:	Pietro Iglio
+!  *  email:	cmm@di.unipi.it, iglio@di.unipi.it
+   *  address:	Dipartimento di Informatica
+   *		Corso Italia 40
+   *		I-56125 Pisa, Italy
+--- 1,10 ----
+  /*---------------------------------------------------------------------------*
+   *
+!  *  msw.h:	memory manager with mark&sweep garbage collection.
+   *
+   *  date:	6 March 1995
+   *  authors:	Pietro Iglio
+!  *  email:	cmm@di.unipi.it, iglio@posso.dm.unipi.it
+   *  address:	Dipartimento di Informatica
+   *		Corso Italia 40
+   *		I-56125 Pisa, Italy
+diff -c /home/omega/attardi/posso/cmm/tempheap.cpp /project/posso/cmm/curr/cmm/tempheap.cpp
+*** /home/omega/attardi/posso/cmm/tempheap.cpp	Mon Dec 23 11:35:50 1996
+--- /project/posso/cmm/curr/cmm/tempheap.cpp	Wed Nov 27 17:58:08 1996
+***************
+*** 66,72 ****
+    bzero((char*)&objectMap[WORD_INDEX(body)],
+  	((usedWords() + bitsPerWord - 1) / bitsPerWord) * bytesPerWord);
+  #if !HEADER_SIZE || defined(MARKING)
+!   resetliveMap();
+  #endif
+    top = BOTTOM;
+  }
+--- 66,73 ----
+    bzero((char*)&objectMap[WORD_INDEX(body)],
+  	((usedWords() + bitsPerWord - 1) / bitsPerWord) * bytesPerWord);
+  #if !HEADER_SIZE || defined(MARKING)
+!   bzero((char*)&liveMap[WORD_INDEX(body)],
+! 	((usedWords() + bitsPerWord - 1) / bitsPerWord) * bytesPerWord);
+  #endif
+    top = BOTTOM;
+  }
+***************
+*** 144,163 ****
+  
+  RootSet::RootSet()
+  {
+!   // Default to non conservative
+    isConservative = false;
+  }
+  
+  void
+  RootSet::scan(CmmHeap *heap)
+  {
+!   CmmObject *objPtr, **objPtrLoc;
+    CmmHeap *oldHeap = Cmm::heap;
+    Cmm::heap = heap;
+!   roots.begin();
+!   while (objPtr = roots.get()) objPtr->traverse();
+!   rootsLoc.begin();
+!   while (objPtrLoc = rootsLoc.get()) heap->scavenge(objPtrLoc);
+    Cmm::heap = oldHeap;
+  }
+  
+--- 145,282 ----
+  
+  RootSet::RootSet()
+  {
+!   entryInc = 10;
+!   entryNum = 10;
+!   current = 0;
+!   entrypNum = 10;
+!   currentp = 0;
+! 
+!   // Default to not-conservative
+    isConservative = false;
++ 
++   entry = new CmmObject*[entryNum];
++   entryp = new CmmObject**[entrypNum];
++ 
++   int i;
++   for (i = 0; i < entryNum; i++)
++     entry[i] = NULL;
++   for (i = 0; i < entrypNum; i++)
++     entryp[i] = NULL;
++ 
++ }
++ 
++ void 
++ RootSet::set(CmmObject *obj)
++      // trivial implementation, but this is not a critical operation
++ {
++   int i;
++   for (i = 0; i < entryNum; i++)
++     if (entry[i] == NULL)
++       {
++ 	entry[i] = obj;
++ 	return;
++       }
++   CmmObject **tmp = new CmmObject*[entryNum + entryInc];
++ 
++   for (i = 0; i < entryNum; i++)
++     tmp[i] = entry[i];
++   delete entry;
++   entry = tmp;
++   entry[i++] = obj;
++   entryNum += entryInc;
++   // put the rest to NULL.
++   for (; i < entryNum; i++)
++     entry[i] = NULL;
++ }
++ 
++ void 
++ RootSet::unset(CmmObject *obj)
++ {
++   int i;
++   for (i = 0; ((i < entryNum) && (entry[i] != obj)); i++);
++   assert (entry[i] == obj);
++   entry[i] = NULL;
++ }
++ 
++ CmmObject *
++ RootSet::get()
++ {
++   // look for a not empty entry
++   while (current < entryNum)
++     {
++       if (entry[current])
++ 	return entry[current++];
++       else
++ 	current++;
++     }
++   // No more entries;
++   return (CmmObject *)NULL;
++ }
++ 
++ void
++ RootSet::setp(CmmObject **obj)
++      // trivial implementation, but this is not a critical operation
++ {
++   int i;
++   for (i = 0; i < entrypNum; i++)
++     if (entryp[i] == NULL)
++       {
++ 	entryp[i] = obj;
++ 	return;
++       }
++   CmmObject ***tmp = new CmmObject**[entrypNum + entryInc];
++ 
++   for (i = 0; i < entrypNum; i++)
++     tmp[i] = entryp[i];
++   delete entryp;
++   entryp = tmp;
++   entryp[i++] = obj;
++   entrypNum += entryInc;
++   // put the rest to NULL.
++   for (; i < entrypNum; i++)
++     entryp[i] = NULL;
++ }
++ 
++ void
++ RootSet::unsetp(CmmObject **obj)
++ {
++   int i;
++   for (i = 0; ((i < entrypNum) && (entryp[i] != obj)); i++);
++   assert (entryp[i] == obj);
++   entryp[i] = NULL;
++ }
++ 
++ CmmObject **
++ RootSet::getp()
++ {
++   // look for a not empty entry
++   while (currentp < entrypNum)
++     {
++       if (entryp[currentp])
++ 	return entryp[currentp++];
++       else
++ 	currentp++;
++     }
++   // No more entries;
++   return (CmmObject **)NULL;
++ }
++ 
++ void
++ RootSet::reset()
++ {
++   current = 0;
++   currentp = 0;
+  }
+  
+  void
+  RootSet::scan(CmmHeap *heap)
+  {
+!   reset();
+!   CmmObject *objPtr, **objPtrPtr;
+    CmmHeap *oldHeap = Cmm::heap;
+    Cmm::heap = heap;
+!   while (objPtr = get()) objPtr->traverse();
+!   while (objPtrPtr = getp()) heap->scavenge(objPtrPtr);
+    Cmm::heap = oldHeap;
+  }
+  
+diff -c /home/omega/attardi/posso/cmm/tempheap.h /project/posso/cmm/curr/cmm/tempheap.h
+*** /home/omega/attardi/posso/cmm/tempheap.h	Mon Dec 23 12:28:05 1996
+--- /project/posso/cmm/curr/cmm/tempheap.h	Fri Nov 22 23:35:36 1996
+***************
+*** 88,94 ****
+    int top;			// index to the first free word
+  };
+  
+- 
+  /*---------------------------------------------------------------------------*
+   *
+   * -- RootSet
+--- 88,93 ----
+***************
+*** 99,124 ****
+  {
+  private:
+    bool isConservative;
+!   void scanSystemRoots() {}; // Still to define
+  
+  public:
+!   RootSet();
+!   void insert(CmmObject* p) { roots.insert(p); }
+!   void insert(CmmObject** p){ rootsLoc.insert(p); }
+!   void erase(CmmObject* p)  { roots.erase(p); }
+!   void erase(CmmObject** p) { rootsLoc.erase(p); }
+    void scan(CmmHeap *);
+    
+!   // back compatibility
+!   void set(CmmObject* p)    { roots.insert(p); }
+!   void setp(CmmObject** p)  { rootsLoc.insert(p); }
+!   void unset(CmmObject* p)  { roots.erase(p); }
+!   void unsetp(CmmObject** p){ rootsLoc.erase(p); }
+!   
+  private:
+!   
+!   Set<CmmObject>  roots;
+!   Set<CmmObject*> rootsLoc;
+  };
+  
+  
+--- 98,127 ----
+  {
+  private:
+    bool isConservative;
+!   void scanSystemRoots() {};	// Still to define
+  
+  public:
+!   void set(CmmObject *);
+!   void unset(CmmObject *);
+!   CmmObject *get();
+!   void setp(CmmObject **);
+!   void unsetp(CmmObject **);
+!   CmmObject **getp();
+!   void reset();
+! 
+    void scan(CmmHeap *);
+    
+!   RootSet();
+! 
+  private:
+!   int entryInc;			// = 10;
+!   int entryNum;			// = 10;
+!   int current;			// = 0;
+!   int entrypNum;		// = 10;
+!   int currentp;			// = 0;
+! 
+!   CmmObject **entry;
+!   CmmObject ***entryp;
+  };
+  
+  
+***************
+*** 132,151 ****
+  
+  class TempHeap : public CmmHeap 
+  {
+!   
+  public:
+!   
+    void scavenge(CmmObject **);
+    void collect();
+    void reset();
+    void weakReset();
+!   
+    TempHeap(int bytes = 100000) {
+!     
+      current = 0;
+      toCollect = false;
+      chunkInc = 4;
+!     
+      chunkNum = chunkInc;
+      chunkSize = bytes;
+      // Can you use expand here?
+--- 135,154 ----
+  
+  class TempHeap : public CmmHeap 
+  {
+! 
+  public:
+! 
+    void scavenge(CmmObject **);
+    void collect();
+    void reset();
+    void weakReset();
+! 
+    TempHeap(int bytes = 100000) {
+! 
+      current = 0;
+      toCollect = false;
+      chunkInc = 4;
+!       
+      chunkNum = chunkInc;
+      chunkSize = bytes;
+      // Can you use expand here?
+***************
+*** 155,161 ****
+    }
+    
+    RootSet roots;
+!   
+  private: 
+    
+    bool toCollect;
+--- 158,164 ----
+    }
+    
+    RootSet roots;
+! 
+  private: 
+    
+    bool toCollect;
+***************
+*** 166,172 ****
+    Container **chunk;
+    
+    CmmObject *copy(CmmObject *);
+!   
+    GCP alloc(unsigned long);
+    
+    Container *inside(CmmObject *ptr) {
+--- 169,175 ----
+    Container **chunk;
+    
+    CmmObject *copy(CmmObject *);
+! 
+    GCP alloc(unsigned long);
+    
+    Container *inside(CmmObject *ptr) {
+***************
+*** 181,185 ****
+    void expand();
+  };
+  
+! #endif				// _tempheap_h
+  /* DON'T ADD STUFF AFTER THIS #endif */
+--- 184,188 ----
+    void expand();
+  };
+  
+! #endif // _tempheap_h
+  /* DON'T ADD STUFF AFTER THIS #endif */

@@ -31,7 +31,6 @@
 #  "test"  compiles and runs all tests (listed in TESTS) reporting which
 #        ones succeeded and which failed.
 #  "clean"  removes all object code from this directory.
-#  "demo1", "demo2" etc. run various demonstration programs.
 
 CFLAGS	= -O2
 CC	= g++
@@ -40,9 +39,12 @@ HFILES = machine.h cmm.h
 
 OBJS = 	cmm.o tempheap.o msw.o memory.o
 
-TESTS = test2 test3 test4 test5 test6 test8 testp2 testp3 testp5
+TESTS = test2 test3 test4 test5 test6 test7 test8 testmsw1 testmsw2 testmsw3
 
 all: libCmm.a
+
+debug:
+	make CFLAGS="-UNDEBUG -g" all
 
 test : ${TESTS}
 	 @for i in ${TESTS}; do  \
@@ -51,41 +53,41 @@ test : ${TESTS}
 	   )                    \
 	done
 
-demo: demo1 demo2
-
 libCmm.a: $(OBJS)
 	ar ru libCmm.a $(OBJS)
 	ranlib libCmm.a
 
-cmm.o: cmm.cc $(HFILES)
-	$(CC) $(CFLAGS) -c cmm.cc
+cmm.o: cmm.cpp $(HFILES)
+	$(CC) $(CFLAGS) -c cmm.cpp
 
-memory.o: memory.c $(HFILES)
-	$(CC) $(CFLAGS) -c memory.c
+memory.o: memory.cpp $(HFILES)
+	$(CC) $(CFLAGS) -c memory.cpp
 
-tempheap.o: tempheap.cc tempheap.h $(HFILES)
-	$(CC) $(CFLAGS) -c tempheap.cc
+tempheap.o: tempheap.cpp tempheap.h $(HFILES)
+	$(CC) $(CFLAGS) -c tempheap.cpp
 
-msw.o: msw.cc msw.h $(HFILES)
-	$(CC) $(CFLAGS) -c msw.cc
+msw.o: msw.cpp msw.h $(HFILES)
+	$(CC) $(CFLAGS) -c msw.cpp
 
-test2:	test2.cc libCmm.a
-	$(CC) $(CFLAGS) -o test2 test2.cc libCmm.a
-test3:	test3.cc libCmm.a
-	$(CC) $(CFLAGS) -o test3 test3.cc libCmm.a
-test4:	test4.cc libCmm.a
-	$(CC) $(CFLAGS) -o test4 test4.cc libCmm.a 
-test5:	test5.cc libCmm.a
-	$(CC) $(CFLAGS) -o test5 test5.cc libCmm.a 
-test6:	test6.cc libCmm.a
-	$(CC) $(CFLAGS) -o test6 test6.cc libCmm.a 
-test8:	test8.cc libCmm.a
-	$(CC) $(CFLAGS) -o test8 test8.cc libCmm.a 
-testp2: testp2.c libCmm.a
-	$(CC) $(CFLAGS) -g -o testp2 testp2.c libCmm.a
-testp3: testp3.c libCmm.a
-	$(CC) $(CFLAGS) -g -o testp3 testp3.c libCmm.a
-testp5: testp5.cc libCmm.a
-	$(CC) $(CFLAGS) -o testp5 testp5.cc libCmm.a
+test2:	test2.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test2 test2.cpp libCmm.a
+test3:	test3.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test3 test3.cpp libCmm.a
+test4:	test4.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test4 test4.cpp libCmm.a 
+test5:	test5.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test5 test5.cpp libCmm.a 
+test6:	test6.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test6 test6.cpp libCmm.a 
+test7:	test7.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test7 test7.cpp libCmm.a 
+test8:	test8.cpp libCmm.a
+	$(CC) $(CFLAGS) -o test8 test8.cpp libCmm.a 
+testmsw1: testmsw1.c libCmm.a
+	$(CC) $(CFLAGS) -g -o testmsw1 testmsw1.c libCmm.a
+testmsw2: testmsw2.c libCmm.a
+	$(CC) $(CFLAGS) -g -o testmsw2 testmsw2.c libCmm.a
+testmsw3: testmsw3.cpp libCmm.a
+	$(CC) $(CFLAGS) -o testmsw3 testmsw3.cpp libCmm.a
 clean:
 	/bin/rm -rf *.o $(TESTS) libCmm.a

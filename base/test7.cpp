@@ -87,11 +87,11 @@ void  vectortest()
   printf("\n");		   
 }
 
+void
 main()
 {
   /* List of vectors > 1 page */
   vectortest();
-
 
   exit(0);
 }
