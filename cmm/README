@@ -102,6 +102,12 @@ If no heap parameter is supplied, the objects are allocated in the heap
 specified by variable Cmm::heap, which by default has value
 Cmm::theDefaultHeap.
 
+Currently the available choices for Cmm::heap are:
+
+	Cmm::theUncollectedHeap
+        Cmm::theDefaultHeap
+	Cmm::theMSHeap
+
 
 DefaultHeap
 ------------------------------------------------------------------------------
@@ -133,7 +139,7 @@ A TempHeap is created with the instruction:
 At the beginning of the phase, the program can switch to the tempHeap
 and clear it at the end of the phase, as follows:
 
-  CmmHeap =previousHeap = CmmHeap::heap;  // save the current heap
+  CmmHeap = previousHeap = CmmHeap::heap;  // save the current heap
   CmmHeap::heap = tempHeap;       // set the current heap to tempHeap
    ... program phase
   CmmHeap::heap = previousHeap;   // restore the previous heap
@@ -155,18 +161,10 @@ details.
 Once you declare class `A' as a subclass of CmmObject, every usage of new and
 delete operators will automatically use the MSW memory manager.
 
-No explicit initialization of the collector is needed and MSW_Automatic is
-the default. You can override the default with a statement:
+No explicit initialization of the collector is needed.  The collector can be
+called explictly with:
 
-	Cmm::heap = new MarkAndSweep(MSW_OnDemand);
-
-before using any other MSW function. The collector can be called explictly
-with:
 	Cmm::heap->collect();
-
-This is the only way to activate the collector if you use the MSW_OnDemand
-flag, otherwise the collector is automatically activated when the heap is
-full.
 
  ==============================================================================
  | Quick Guide for C
@@ -180,20 +178,15 @@ The "msw.h" file must be included at the top of every C file that uses the
 allocator. The memory manager must be initialized. Such task is performed
 calling:
 
-	MswInit(<type>);
+	mswInit();
 
 before using any other function provided by MSW.
 
-<type> can be:
-
- - MSW_Automatic (the collector is automatically invoked when needed)
- - MSW_OnDemand  (the collector is manually invoked by the user program) 
-
 Once the collector has been initialized, you can use:
 
-  void * mswAlloc   (size_t size);	       to allocate a memory object
-  void   mswFree    (void * obj);	       to release a memory object
-  void * mswRealloc (void * obj, size_t size); to resize a memory object
+  void * mswAlloc  (size_t size)	       to allocate a memory object
+  void   mswFree   (void * obj) 	       to release a memory object
+  void * mswRealloc(void * obj, size_t size)   to resize a memory object
 
 The behaviour of those functions is similar to the behaviour of malloc, free,
 realloc.
@@ -205,7 +198,7 @@ the MSW_Automatic flag.
 
 For time-critical applications one can use:
 
-	void * mswAllocOpaque (size_t size);
+	void * mswAllocOpaque(size_t size)
 
 in the case you ensure that the allocated object will not contain pointers
 inside (e.g. strings). This way such objects will not be traversed during the
@@ -216,7 +209,7 @@ If the collector has been initialized with the MSW_Automatic flag, then
 the collector is invoked automatically as soon the memory is low. It can 
 also be called explicitly with:
 
-	void 	mswCollect (void);
+	void 	mswCollect(void)
 
 This is the only way to invoke the collector if MSW has been initialized with
 the MSW_OnDemand flag.

@@ -328,7 +328,7 @@ void
 TempHeap::scavenge(CmmObject **ptr)
 {
   GCP pp = (GCP)*ptr;
-  if (OUTSIDE_HEAP(GCPtoPage(pp)))
+  if (OUTSIDE_HEAPS(GCPtoPage(pp)))
     return;
 
   CmmObject *oldPtr = basePointer(pp);
@@ -353,11 +353,11 @@ TempHeap::scavenge(CmmObject **ptr)
 #   else
       (MARKED(oldPtr))
 #   endif
-	*ptr = (CmmObject *)((int)oldPtr->GetForward() + offset);
+	*ptr = (CmmObject *)((int)oldPtr->getForward() + offset);
   else
     {
       CmmObject *newObj = copy(oldPtr);
-      oldPtr->SetForward(newObj);
+      oldPtr->setForward(newObj);
       *ptr = (CmmObject *)((int)newObj + offset);
     }
 }

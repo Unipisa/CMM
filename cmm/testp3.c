@@ -36,7 +36,7 @@ main(int argc, char ** argv)
 	if (par)
 	      printf("\n+++++ Using collector +++++\n");
 
-	mswInit(MSW_OnDemand);
+	mswInit();
 
 	test1();
 	if (par) 

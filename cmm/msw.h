@@ -40,9 +40,6 @@
 #ifndef	_msw_h
 #define _msw_h
 
-#define	MSW_Automatic		1
-#define MSW_OnDemand		2
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -58,7 +55,7 @@ extern void *		mswCalloc		(unsigned long, unsigned long);
 extern void		mswCollect		(void);
 extern void		mswCollectNow		(void);
 
-extern void		mswInit			(unsigned);
+extern void		mswInit			(void);
 extern void		mswShowInfo		(void);
 
 extern void		mswCheckHeap		(int verbose);

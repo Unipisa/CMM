@@ -1,4 +1,4 @@
-/* Test program for the gcalloc.c */
+/* Test program for the MSW Heap */
 
 /* Externals */
 
@@ -197,11 +197,9 @@ void  listtest2()
 
 CP  gp;		/* A global pointer */
 
-
-
 main()
 {
-  Cmm::heap = ::new MarkAndSweep(MSW_Automatic);
+  Cmm::heap = Cmm::theMSHeap;
   /* List construction test */
   /* printf("WARNING: skipping listtest1()!\n"); */
   listtest1();

@@ -9,6 +9,7 @@
  *		Corso Italia 40
  *		I-56125 Pisa, Italy
  *
+ *  Copyright (C) 1990 Digital Equipment Corporation.
  *  Copyright (C) 1993, 1994, 1995 Giuseppe Attardi and Tito Flagella.
  *
  *  This file is part of the PoSSo Customizable Memory Manager (CMM).
@@ -22,11 +23,11 @@
  * Users of this software agree to the terms and conditions set forth herein,
  * and agree to license at no charge to all parties under these terms and
  * conditions any derivative works or modified versions of this software.
- * 
+ *
  * This software may be distributed (but not offered for sale or transferred
  * for compensation) to third parties, provided such third parties agree to
- * abide by the terms and conditions of this notice.  
- * 
+ * abide by the terms and conditions of this notice.
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE COPYRIGHT HOLDERS DISCLAIM ALL
  * WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL THE COPYRIGHT HOLDERS
@@ -50,64 +51,21 @@
  *
  *---------------------------------------------------------------------------*/
 
-/*
- *              Copyright 1990 Digital Equipment Corporation
- *                         All Rights Reserved
- *
- * Permission to use, copy, and modify this software and its documentation is
- * hereby granted only under the following terms and conditions.  Both the
- * above copyright notice and this permission notice must appear in all copies
- * of the software, derivative works or modified versions, and any portions
- * thereof, and both notices must appear in supporting documentation.
- *
- * Users of this software agree to the terms and conditions set forth herein,
- * and hereby grant back to Digital a non-exclusive, unrestricted, royalty-free
- * right and license under any changes, enhancements or extensions made to the
- * core functions of the software, including but not limited to those affording
- * compatibility with other hardware or software environments, but excluding
- * applications which incorporate this software.  Users further agree to use
- * their best efforts to return to Digital any such changes, enhancements or
- * extensions that they make and inform Digital of noteworthy uses of this
- * software.  Correspondence should be provided to Digital at:
- * 
- *                       Director of Licensing
- *                       Western Research Laboratory
- *                       Digital Equipment Corporation
- *                       250 University Avenue
- *                       Palo Alto, California  94301  
- * 
- * This software may be distributed (but not offered for sale or transferred
- * for compensation) to third parties, provided such third parties agree to
- * abide by the terms and conditions of this notice.  
- * 
- * THE SOFTWARE IS PROVIDED "AS IS" AND DIGITAL EQUIPMENT CORP. DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL DIGITAL EQUIPMENT
- * CORPORATION BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
- * ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- * SOFTWARE.
- */
-
 #include "cmm.h"
 #include <setjmp.h>
 
 /* Version tag */
 
-char*  Cmm::version = "CMM 1.6";
+char*  Cmm::version = "CMM 1.7";
 
 /*---------------------------------------------------------------------------*
  *
  * -- Garbage Collected Heap Definitions
  *
- *---------------------------------------------------------------------------*/
-
-/*
  * The heap consists of a discontiguous set of pages of memory, where each
  * page is bytesPerPage long.  N.B.  the page size for garbage collection is
  * independent of the processor's virtual memory page size.
- */
+ *---------------------------------------------------------------------------*/
 
 static int   totalPages;	/* # of pages in the heap		*/
 static int   heapSpanPages;	/* # of pages that span the heap	*/
@@ -129,14 +87,31 @@ unsigned long *liveMap;		/* Bitmap of live objects		*/
 int	     *pageLink;		/* Page link for each page		*/
 short	     *pageSpace;	/* Space number for each page		*/
 short	     *pageGroup;	/* Size of group of pages		*/
-
-int	     currentSpace;	/* Current space number			*/
-int	     nextSpace;		/* Next space number			*/
-
 CmmHeap      **pageHeap;	/* Heap to which each page belongs	*/
 
-int          tablePages;	/* # of pages used by tables	*/
+int	     fromSpace;		/* Space id for FromSpace		*/
+static int   nextSpace;		/* which space to use: normally FromSpace,
+				   StableSpace within collect().	*/
+
+int          tablePages;	/* # of pages used by tables		*/
 int          firstTablePage;	/* index of first page used by table	*/
+
+/*----------------------------------------------------------------------*
+ * -- Page spaces
+ *----------------------------------------------------------------------*/
+
+#define inStableSpace(page) 	(pageSpace[page] == STABLESPACE)
+#define inFromSpace(page) 	(pageSpace[page] == fromSpace)
+#define inFreeSpace(page)    	(UNALLOCATEDSPACE <= pageSpace[page] \
+				 && pageSpace[page] < fromSpace)
+
+#define STABLESPACE		0
+#define UNALLOCATEDSPACE	2 /* neither FromSpace nor StableSpace	*/
+#ifdef MARKING
+# define SCANNEDSPACE		1 /* stable page already scanned by collect*/
+# define SET_SCANNED(page)	(pageSpace[page] = SCANNEDSPACE)
+# define SCANNED(page)		(pageSpace[page] == SCANNEDSPACE)
+#endif
 
 /*---------------------------------------------------------------------------*
  *
@@ -154,30 +129,31 @@ int          firstTablePage;	/* index of first page used by table	*/
  *---------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------*
- Tito:
-   A new algorithm for garbage collection is used when MARKING is defined.
-   The new algorithm is:
-   1) Look at the roots to promote a set of pages whose objects cannot
-      be moved. Any reachable object is marked as a reached object setting
-      its bit into the "liveMap" bitmap to 1.
-   2) Scan the promoted pages, traversing all the objects marked as reached.
-   Traverse applies the scavenge to any pointer internal to the traversed
-   objects. scavenge does:
-    - if the pointer is outside the heap do nothing;
-    - if the pointer is to an object in another heap traverse that object.
-    - if the object has already been reached, then if the object is in 
-      a promoted page return, else set the pointer to the forward position.
-    - if the object has not yet been reached, then if the object is in 
-      a promoted page, mark it and apply traverse to it, else copy the object,
-      set the old header to the forward position, and set the forward bit of
-      the new object to 0.
 
-   Note that any page allocated to copy reachable objects is added to the
-   promoted set. For this reason you don't need to apply traverse to
-   moved objects. They will be traversed as they are reachable objects in
-   promoted pages.
+   When MARKING is defined, traverse() is applied only to marked objects
+   in StableSpace. As a consequence, scavenge() may need to apply
+   traverse() recursively.
+   The collection algorithm is as follows:
+   1) Clear the liveMap.
+   2) Examine the roots and promote the pages to which they point,
+      adding them to StableSpace. Any reachable object is marked as live
+      by setting its bit in the "liveMap" bitmap.
+   3) Scan the pages in StableSpace, traversing all objects marked as live.
+   Traverse applies scavenge() to any location within the object
+   containing a pointer p. scavenge() does:
+    - if p points outside any collected heap: do nothing;
+    - if p points to an object in another heap: traverse such object;
+    - if p points into a non promoted page:
+      if *p is not marked live, mark it, copy it, set the forwarding pointer;
+      update p to the forwarding pointer.
+    - if p points into a promoted page and *p is not marked live:
+      mark it and, if the page has not been scanned yet, traverse it.
+      To distinguish scanned pages, collect() sets their pageSpace to SCANNED;
+      at the end of collection the pageSpace is set back to StableSpace.
 
-   3) Reset the mark bit for any object in the promoted pages.
+   Note that objects are copied into pages in StableSpace, which are scanned
+   sequentially. Copied objects will be traversed when their page will
+   be scanned.
 
  *---------------------------------------------------------------------------*/
 
@@ -190,27 +166,25 @@ int          firstTablePage;	/* index of first page used by table	*/
 
 int Cmm::verbose = 0;		/* controls amount of printout */
 
+/* Actual heap configuration */
+
+int  Cmm::minHeap  = CMM_MINHEAP;        /* # of bytes of initial heap      */
+int  Cmm::maxHeap  = CMM_MAXHEAP;        /* # of bytes of the final heap    */
+int  Cmm::incHeap  = CMM_INCHEAP;        /* # of bytes of each increment    */
+int  Cmm::gcThreshold = CMM_GCTHRESHOLD; /* grow w/out GC till this size    */
+int  Cmm::generational = CMM_GENERATIONAL; /* % allocated to force
+					      total collection              */
+int  Cmm::incPercent = CMM_INCPERCENT;   /* % allocated to force expansion  */
+int  Cmm::flags      = CMM_FLAGS;        /* option flags		    */
+bool Cmm::defaults   = true;	         /* default setting in force	    */
+bool Cmm::created    = false;	         /* boolean indicating heap created */
+
 /*
  * An instance of the type Cmm is created to configure the size of the
  * initial heap, the expansion increment, the maximum size of the heap,
  * the allocation percentage to force a total collection, the allocation
  * percentage to force heap expansion, and garbage collection options.
  */
-
-/* Actual heap configuration */
-
-int  Cmm::minHeap  = CMM_MINHEAP; /* # of bytes of initial heap   */
-int  Cmm::maxHeap  = CMM_MAXHEAP; /* # of bytes of the final heap */
-int  Cmm::incHeap  = CMM_INCHEAP; /* # of bytes of each increment */
-int  Cmm::gcThreshold = CMM_GCTHRESHOLD; /* grow w/out GC till this size */
-int  Cmm::generational = CMM_GENERATIONAL; /* % allocated to force
-					      total collection       */
-
-int  Cmm::incPercent = CMM_INCPERCENT; /* % allocated to force expansion */
-int  Cmm::flags      = CMM_FLAGS;      /* option flags		*/
-bool Cmm::defaults   = true;	       /* default setting in force*/
-bool Cmm::created    = false;	       /* boolean indicating heap created */
-
 
 Cmm::Cmm(int newMinHeap, int newMaxHeap, int newIncHeap,
 	 int newGenerational, int newIncPercent, int newGcThreshold,
@@ -260,6 +234,7 @@ Cmm::Cmm(int newMinHeap, int newMaxHeap, int newIncHeap,
  * The header for a one-word double alignment pad is kept in doublepad.
  */
 
+#define OBJECT_TAG 2
 #if HEADER_SIZE
 static int  freeSpaceTag = MAKE_TAG(0);
 # ifdef DOUBLE_ALIGN
@@ -273,9 +248,9 @@ static int  doublepad = MAKE_HEADER(1, MAKE_TAG(1));
 #endif // HEADER_SIZE
 
 #ifdef DOUBLE_ALIGN
-#define onePageObjWords (wordsPerPage-HEADER_SIZE)
+#define maxSizePerPage (wordsPerPage-HEADER_SIZE)
 #else
-#define onePageObjWords wordsPerPage
+#define maxSizePerPage wordsPerPage
 #endif
 
 /*---------------------------------------------------------------------------*
@@ -284,21 +259,18 @@ static int  doublepad = MAKE_HEADER(1, MAKE_TAG(1));
  *
  *---------------------------------------------------------------------------*/
 
-// Declaring a static variable of type _CmmInit here ensure that the _CmmInit
-// constructor is called before of main().
+// Declaring a static variable of type _CmmInit here ensures that the _CmmInit
+// constructor is called before main().
 static _CmmInit _DummyCmmInit;
 
 /*---------------------------------------------------------------------------*
  *
  * --  Roots
  *
+ * Roots explicitely registered with the garbage collector are contained in
+ * the following structure, allocated from the non-garbage collected heap.
+ *
  *---------------------------------------------------------------------------*/
-
-/*
- * The following structure contains the additional roots registered with
- * the garbage collector.  It is allocated from the non-garbage collected
- * heap.
- */
 
 #define	    rootsIncrement 10
 static int  rootsCount = 0;
@@ -309,9 +281,8 @@ static struct
 RootsStruct
 {
   GCP	     addr;		/* Address of the roots */
-  int  	     bytes;		/* Number of bytes in the roots */ 
-
-}  * roots;
+  int  	     bytes;		/* Number of bytes in the roots */
+} * roots;
 
 
 /*---------------------------------------------------------------------------*
@@ -355,8 +326,8 @@ gcUnroots(void* addr)
 {
   int i;
 
-  for (i = 0; i < rootsCount; i++) 
-    if (roots[i].addr == addr) 
+  for (i = 0; i < rootsCount; i++)
+    if (roots[i].addr == addr)
       {
 	roots[i].addr = 0;
 	freedEntries++;
@@ -543,11 +514,11 @@ CmmInit()
 
   /* Log actual heap parameters if from environment or logging */
   if ((environmentValue("CMM_MINHEAP", Cmm::minHeap)
-       | environmentValue("CMM_MAXHEAP", Cmm::maxHeap) 
-       | environmentValue("CMM_INCHEAP", Cmm::incHeap) 
-       | environmentValue("CMM_GENERATIONAL", Cmm::generational) 
-       | environmentValue("CMM_INCPERCENT", Cmm::incPercent) 
-       | environmentValue("CMM_GCTHRESHOLD", Cmm::gcThreshold) 
+       | environmentValue("CMM_MAXHEAP", Cmm::maxHeap)
+       | environmentValue("CMM_INCHEAP", Cmm::incHeap)
+       | environmentValue("CMM_GENERATIONAL", Cmm::generational)
+       | environmentValue("CMM_INCPERCENT", Cmm::incPercent)
+       | environmentValue("CMM_GCTHRESHOLD", Cmm::gcThreshold)
        | environmentValue("CMM_FLAGS", Cmm::flags)
        | environmentValue("CMM_VERBOSE", Cmm::verbose))
       || Cmm::verbose)
@@ -571,7 +542,7 @@ CmmInit()
 		    + bytesPerPage - 1];
   if (heap == NULL)
     {
-      fprintf(stderr, 
+      fprintf(stderr,
 	      "\n****** CMM  Unable to allocate %d byte heap\n", Cmm::minHeap);
       abort();
     }
@@ -609,12 +580,9 @@ CmmInit()
 
   /* Initialize tables */
   for (i = firstHeapPage ; i <= lastHeapPage ; i++)
-    {
-      pageHeap[i] = NOHEAP;
-      //!! pageSpace[i] = UNALLOCATEDSPACE;
-    }
-  currentSpace = 3;		// leave 1 as UNALLOCATEDSPACE
-  nextSpace = 3;
+    pageHeap[i] = NOHEAP;
+  fromSpace = UNALLOCATEDSPACE + 1;
+  nextSpace = fromSpace;
   firstFreePage = firstHeapPage;
   queueHead = 0;
   Cmm::created = true;
@@ -633,7 +601,7 @@ CmmInit()
 #   endif
 # endif
 
-  // The following initializations are needed by the CmmObject::new 
+  // The following initializations are needed by the CmmObject::new
   // operator. For this reason they don't use new, but ::new.
 
   aCmmObject = ::new CmmObject;
@@ -734,7 +702,7 @@ expandHeap(int increment)
       if (inc_heap) delete inc_heap;
       expandFailed = true;
       WHEN_VERBOSE (CMM_STATS,
-		  fprintf(stderr, "\n***** CMM  Heap expansion failed\n"));
+		    fprintf(stderr, "\n***** CMM  Heap expansion failed\n"));
       return  0;
     }
   set_new_handler(saveNewHandler);
@@ -796,7 +764,7 @@ expandHeap(int increment)
       new_liveMap[i] = liveMap[i];
 #endif
     }
-  
+
   pageSpace = new_pageSpace;
   pageLink = new_pageLink;
   pageGroup = new_pageGroup;
@@ -812,27 +780,26 @@ expandHeap(int increment)
   tablePages = new_tablePages;
   firstTablePage = GCPtoPage(new_tables);
   firstFreePage = inc_firstHeapPage;
-  
+
   WHEN_VERBOSE (CMM_STATS,
-	      fprintf(stderr,
-		      "\n***** CMM  Heap expanded to %d bytes\n",
-		      totalPages * bytesPerPage));
+		fprintf(stderr,
+			"\n***** CMM  Heap expanded to %d bytes\n",
+			totalPages * bytesPerPage));
   return  inc_firstHeapPage;
 }
 
-
 /*---------------------------------------------------------------------------*
- * -- emptyStableSet
+ * -- emptyStableSpace
  *
- * Moves the stable set, up to end, back into the currentSpace.
+ * Moves the pages in StableSpace, up to end, into the FromSpace.
  * A total collection is performed by calling this before calling
  * collect().  When generational collection is not desired, this is called
- * after collection to empty the stable set.
+ * after collection to empty the StableSpace.
  *
  *---------------------------------------------------------------------------*/
 
 static void
-emptyStableSet(int end)
+emptyStableSpace(int end)
 {
   int scan;
   end = pageLink[end];
@@ -841,7 +808,7 @@ emptyStableSet(int end)
       scan = queueHead;
       int pages = pageGroup[scan];
       while (pages--)
-	pageSpace[scan++] = currentSpace;
+	pageSpace[scan++] = fromSpace;
       queueHead = pageLink[queueHead];
     }
   int count = 0;
@@ -857,7 +824,7 @@ emptyStableSet(int end)
 /*---------------------------------------------------------------------------*
  * -- queue
  *
- * Adds a page to the stable set page queue.
+ * Adds a page to the StableSpace page queue.
  *---------------------------------------------------------------------------*/
 
 static void
@@ -865,7 +832,7 @@ queue(int page)
 {
   if (queueHead != 0)
     pageLink[queueTail] = page;
-  else 
+  else
     queueHead = page;
   pageLink[page] = 0;
   queueTail = page;
@@ -874,8 +841,8 @@ queue(int page)
 /*---------------------------------------------------------------------------*
  * -- promotePage
  *
- * Pages that have might have references in the stack or the registers are
- * promoted to the stable set.
+ * Pages which contain locations referred from ambiguous roots are
+ * promoted to the StableSpace.
  *
  * Note that objects that get allocated in a CONTINUED page (after a large
  * object) will never move.
@@ -885,7 +852,7 @@ void
 promotePage(GCP cp)
 {
   int page = GCPtoPage(cp);
-  
+
   // Don't promote pages belonging to other heaps.
   // (We noticed no benefit by inlining the following test in the caller)
   if (page >= firstHeapPage
@@ -896,23 +863,19 @@ promotePage(GCP cp)
       CmmObject *bp = basePointer(cp);
       MARK(bp);
 #     endif
-      if (pageSpace[page] == currentSpace)
+      if (inFromSpace(page))
 	{
 	  int pages = pageGroup[page];
 	  if (pages < 0)
 	    {
-	      page += pages; 
-	      pages = pageGroup[page]; 
+	      page += pages;
+	      pages = pageGroup[page];
 	    }
 	  WHEN_VERBOSE (CMM_DEBUGLOG,
-		      fprintf(stderr, "promoted 0x%x\n", pageToGCP(page)));
+			fprintf(stderr, "promoted 0x%x\n", pageToGCP(page)));
 	  queue(page);
-	  Cmm::theDefaultHeap->usedPages += pages; // in nextSpace
+	  Cmm::theDefaultHeap->usedPages += pages; // in StableSpace
 	  Cmm::theDefaultHeap->stablePages += pages;
-#	  ifdef MARKING
-	  pageSpace[page++] = PROMOTEDSPACE;
-	  pages--;
-#	  endif
 	  while (pages--)
 	    pageSpace[page++] = nextSpace;
 	}
@@ -929,12 +892,12 @@ CmmObject *
 basePointer(GCP fp)
 {
   fp = (GCP) ((int)fp & ~(bytesPerWord-1));
-  
+
   register int index 		= WORD_INDEX(fp);
   register int inner 		= BIT_INDEX(fp);
   register unsigned long mask	= 1 << inner;
   register unsigned long bits	= objectMap[index];
-  
+
   do
     {
       do
@@ -956,7 +919,7 @@ basePointer(GCP fp)
  * Forward declarations:
  *---------------------------------------------------------------------------*/
 
-static void verifyObject(GCP, int);
+static void verifyObject(GCP, bool);
 static void verifyHeader(GCP);
 static void newlineIfLogging();
 static void logRoot(long*);
@@ -965,7 +928,7 @@ static void logRoot(long*);
 /*---------------------------------------------------------------------------*
  * -- CmmMove
  *
- * Copies object from currentSpace to nextSpace
+ * Copies object from FromSpace to StableSpace
  *
  * Results: pointer to header of copied object
  *
@@ -982,33 +945,15 @@ CmmMove(GCP cp)
 # endif
 
   /* Verify that the object is a valid pointer and decrement ptr cnt */
-  WHEN_FLAGS (CMM_TSTOBJ, verifyObject(cp, 1));
-  
-  if (pageIsStable(page))
-# ifdef MARKING
-    {
-      if (!MARKED(cp))
-	{
-	  MARK(cp);
-	  if (SCANNED(page)
-#         if HEADER_SIZE
-	      && (HEADER_TAG(*(cp - HEADER_SIZE)) > 1)
-#         endif
-	      )
-	    ((CmmObject *)cp)->traverse();
-	}
-      return(cp);
-    }
-# else
-  return(cp);
-# endif
+  WHEN_FLAGS (CMM_TSTOBJ, verifyObject(cp, true); verifyHeader(cp););
+
   /* If cell is already forwarded, return forwarding pointer */
 # if HEADER_SIZE
   header = cp[-HEADER_SIZE];
   if (FORWARDED(header))
     {
       WHEN_FLAGS (CMM_TSTOBJ, {
-	verifyObject((GCP)header, 0);
+	verifyObject((GCP)header, false);
 	verifyHeader((GCP)header);
       });
       return ((GCP)header);
@@ -1017,11 +962,8 @@ CmmMove(GCP cp)
   if (FORWARDED(cp))
     return ((GCP)*cp);
 # endif
-  
-  /* Move the object */
-  WHEN_FLAGS (CMM_TSTOBJ, verifyHeader(cp));
-  
-  /* Forward or promote object */
+
+  /* Move or promote object */
 #if HEADER_SIZE
   register int  words = HEADER_WORDS(header);
 #else
@@ -1029,23 +971,21 @@ CmmMove(GCP cp)
 #endif
   if (words >= freeWords)
     {
-      /* Promote objects >= a page to stable set */
+      /* Promote objects >= a page to StableSpace */
       /* This is to avoid expandHeap(). See note about collect().
        * We could perform copying during a full GC by reserving in advance
        * a block of pages for objects >= 1 page
        */
-      if (words >= onePageObjWords)
+      if (words >= maxSizePerPage)
 	{
 	  promotePage(cp);
-	  /* tito: you don't need to traverse it now.
-	   * Object will be traversed, when the promoted page will be swept.
-	   */
 	  return(cp);
 	}
       /* Discard any partial page and allocate a new one */
       // We must ensure that this does not invoke expandHeap()
-      Cmm::theDefaultHeap->reservePages(1);
-      WHEN_VERBOSE (CMM_DEBUGLOG, fprintf(stderr, "queued   0x%x\n", firstFreeWord));
+      Cmm::theDefaultHeap->getPages(1);
+      WHEN_VERBOSE (CMM_DEBUGLOG,
+		    fprintf(stderr, "queued   0x%x\n", firstFreeWord));
       queue(GCPtoPage(firstFreeWord));
       Cmm::theDefaultHeap->stablePages += 1;
     }
@@ -1072,9 +1012,6 @@ CmmMove(GCP cp)
 # endif				// !HEADER_SIZE
 # ifdef MARKING
   MARK(np);
-  /* tito: no need to traverse it now.
-     Object will be traversed, when the promoted page will be swept.
-     */
 # endif
   return(np);
 }
@@ -1094,20 +1031,33 @@ DefaultHeap::scavenge(CmmObject **loc)
 {
   GCP pp = (GCP)*loc;
   int page = GCPtoPage(pp);
-  if (!OUTSIDE_HEAP(page))
+  if (!OUTSIDE_HEAPS(page))
     {
-      CmmObject *p = basePointer((GCP)*loc);
-      
-      if (inside((GCP)p))
-	*loc = (CmmObject *)((int)CmmMove((GCP)p) + (int)*loc - (int)p);
-      else
+      GCP p = (GCP)basePointer((GCP)*loc);
+      page = GCPtoPage(p);
+
+      if (inside(p))	// in this heap
 	{
-	  page = GCPtoPage(p);
-	  if (!OUTSIDE_HEAP(page)
-	      // if page is OUTSIDE_HEAP, p must be an ambiguous pointer
-	      && !pageHeap[page]->isOpaque())
-	    visit(p);
+	  if (inFromSpace(page)) // can be moved
+	    *loc = (CmmObject *)((int)CmmMove(p) + (int)*loc - (int)p);
+#         ifdef MARKING
+	  else if (!MARKED(p))
+	    {
+	      assert(inStableSpace(page));
+	      MARK(p);
+	      if (SCANNED(page)	// p was not traversed when page was scanned
+#                 if HEADER_SIZE
+		  && HEADER_TAG(p[-HEADER_SIZE]) == OBJECT_TAG
+#                 endif
+		  )
+		((CmmObject *)p)->traverse();
+	    }
+#         endif // MARKING
 	}
+      else if (!OUTSIDE_HEAPS(page)
+	       // if page is OUTSIDE_HEAPS, p must be an ambiguous pointer
+	       && !pageHeap[page]->isOpaque())
+	visit((CmmObject *)p);
     }
 }
 
@@ -1117,7 +1067,7 @@ DefaultHeap::scavenge(CmmObject **loc)
  * Garbage collection for the DefaultHeap. It is typically
  * called when half the pages in the heap have been allocated.
  * It may also be directly called.
- * 
+ *
  * WARNING: (freePages + reservedPages - usedPages) must be > usedPages when
  * collect() is called to avoid the invocation of expandHeap() in the
  * middle of collection.
@@ -1129,22 +1079,23 @@ DefaultHeap::collect()
   int  page;			/* Page number while walking page list */
   GCP  cp,			/* Pointers to move constituent objects */
   nextcp;
-  
-  
+
+  // firstFreeWord is seen by the collector: it should not consider it a root.
+
   /* Check for heap not yet allocated */
   if (!Cmm::created)
     {
       CmmInit();
       return;
     }
-  
+
   /* Log entry to the collector */
   WHEN_VERBOSE (CMM_STATS, {
     fprintf(stderr, "***** CMM  Collecting - %d%% allocated  ->  ",
 	    HEAPPERCENT(usedPages));
     newlineIfLogging();
   });
-  
+
   /* Allocate rest of the current page */
   if (freeWords != 0) {
 # if HEADER_SIZE
@@ -1155,17 +1106,17 @@ DefaultHeap::collect()
 # endif
     freeWords = 0;
   }
-  
+
   /* Advance space.
-   * Pages allocated by CmmMove() herein will belong to the stable set.
+   * Pages allocated by CmmMove() herein will belong to the StableSpace.
    * At the end of collect() we go back to normal.
    * Therefore objects moved once by the collector will not be moved again
-   * until a full collection is enabled by emptyStableSet().
+   * until a full collection is enabled by emptyStableSpace().
    */
-  
-  nextSpace = currentSpace + 1;
-  usedPages = stablePages;	// start counting in nextSpace
-  
+
+  nextSpace = STABLESPACE;
+  usedPages = stablePages;	// start counting in StableSpace
+
 # if !HEADER_SIZE || defined(MARKING)
   /* Clear the liveMap bitmap */
   bzero((char*)&liveMap[WORD_INDEX(firstHeapPage * bytesPerPage)],
@@ -1181,7 +1132,7 @@ DefaultHeap::collect()
 
     /* ensure flushing of register caches	*/
     if (_setjmp(regs) == 0) _longjmp(regs, 1);
-    
+
     /* Examine the stack:		*/
 #   ifdef STACK_GROWS_DOWNWARD
     for (fp = (GCP)regs; fp < (GCP)stackBottom; fp++)
@@ -1192,10 +1143,10 @@ DefaultHeap::collect()
 	WHEN_VERBOSE (CMM_ROOTLOG, logRoot(fp));
 	promotePage((GCP)*fp);
       }
-    
+
     /* Examine the static areas:		*/
     WHEN_VERBOSE (CMM_ROOTLOG,
-		fprintf(stderr, "Static and registered roots:\n"));
+		  fprintf(stderr, "Static and registered roots:\n"));
 
     CmmExamineStaticAreas(CmmExamineStaticArea);
 
@@ -1207,41 +1158,41 @@ DefaultHeap::collect()
 	  promotePage((GCP)*fp++);
       }
     /* Examine the uncollected heap:		*/
+#   ifndef __WIN32__
     if (Cmm::flags & CMM_HEAPROOTS)
       {
 	WHEN_VERBOSE (CMM_HEAPLOG,
-		    fprintf(stderr, "Uncollected heap roots:\n"));
+		      fprintf(stderr, "Uncollected heap roots:\n"));
 	GCP globalHeapEnd = (GCP)sbrk(0);
 	fp = globalHeapStart;
 	while (fp < globalHeapEnd)
 	  {
-	    if (!inside((GCP)fp)) 
+	    if (!inside((GCP)fp))
 	      {
 		WHEN_VERBOSE (CMM_HEAPLOG, logRoot(fp));
-		if (Cmm::flags & CMM_HEAPROOTS)
-		  promotePage((GCP)*fp);
+		promotePage((GCP)*fp);
 		fp++;
 	      }
 	    else
 	      fp = fp + wordsPerPage; // skip page
 	  }
       }
+#   endif
   }
   WHEN_VERBOSE (CMM_STATS, {
     fprintf(stderr, "%d%% locked  ", HEAPPERCENT(usedPages));
     newlineIfLogging();
   });
-  
-  /* Sweep across stable pages and move their constituent items.	 */
+
+  // Sweep across stable pages and move their constituent items.
   page = queueHead;
   // pages promoted from here should survive this generation:
   int lastStable = queueTail;
   while (page)
     {
-#     ifdef MARKING
-      SET_SCANNED(page);	// pointers to unmarked objects within
-				// this page will have to be traversed
-#     endif
+#     ifdef MARKING		// pointers to unmarked objects within
+      SET_SCANNED(page);	// this page will have to be traversed
+#     endif			// recursively by scavenge
       cp = pageToGCP(page);
       WHEN_VERBOSE (CMM_DEBUGLOG, fprintf(stderr, "sweeping 0x%x\n", cp));
       GCP nextPage = pageToGCP(page + 1);
@@ -1256,7 +1207,7 @@ DefaultHeap::collect()
 	{
 	  WHEN_FLAGS (CMM_TSTOBJ, verifyHeader(cp + HEADER_SIZE));
 #         if HEADER_SIZE
-	  if ((HEADER_TAG(*cp) > 1)
+	  if ((HEADER_TAG(*cp) == OBJECT_TAG)
 #             ifdef MARKING
 	      && MARKED(cp + HEADER_SIZE)
 #             endif
@@ -1274,25 +1225,36 @@ DefaultHeap::collect()
       page = pageLink[page];
     }
 
-  /* Finished, all retained pages are now part of the stable set */
-  currentSpace = currentSpace + 2;
-  nextSpace = currentSpace;
+#ifdef MARKING
+  {
+    /* Restore scanned pages to STABLESPACE */
+    int scan = queueHead;
+    while (scan)
+      {
+	pageSpace[scan] = STABLESPACE;
+	scan = pageLink[scan];
+      }
+  }
+#endif
+
+  /* Finished, all retained pages are now part of the StableSpace */
+  fromSpace = fromSpace + 1;
+  nextSpace = fromSpace;	// resume allocating in FromSpace
   WHEN_VERBOSE (CMM_STATS,
-	      fprintf(stderr, "%d%% stable.\n", HEAPPERCENT(stablePages)));
-  
+		fprintf(stderr, "%d%% stable.\n", HEAPPERCENT(stablePages)));
+
   /* Check for total collection and heap expansion.  */
   if (Cmm::generational != 0)
     {
       /* Performing generational collection */
-      if (HEAPPERCENT(usedPages) >= Cmm::generational) 
+      if (HEAPPERCENT(usedPages) >= Cmm::generational)
 	{
 	  /* Perform a total collection and then expand the heap */
-	  //      doFullGC = true;
-	  emptyStableSet(lastStable);
+	  emptyStableSpace(lastStable);
 	  int  saveGenerational = Cmm::generational;
-	  
+
 	  Cmm::generational = 100;
-	  cp = NULL;			// or collect will promote it again
+	  cp = NULL;		// or collect will promote it again
 	  collect();
 	  if (shouldExpandHeap()) expandHeap(Cmm::incHeap);
 	  Cmm::generational = saveGenerational;
@@ -1302,7 +1264,7 @@ DefaultHeap::collect()
     {
       /* Not performing generational collection */
       if (shouldExpandHeap()) expandHeap(Cmm::incHeap);
-      emptyStableSet(queueTail);
+      emptyStableSpace(queueTail);
     }
 }
 
@@ -1324,7 +1286,8 @@ CmmExamineStaticArea(GCP base, GCP limit)
  *
  *---------------------------------------------------------------------------*/
 
-static inline int  nextPage(int page)
+static inline int
+nextPage(int page)
 {
   return (page == lastHeapPage) ? firstHeapPage : page + 1;
 }
@@ -1347,12 +1310,12 @@ allocatePages(int pages, CmmHeap *heap)
   int	firstPage;		/* Page # of first free page */
   int	allPages;		/* # of pages in the heap */
   GCP	firstByte;		/* address of first free page */
-  
+
   allPages = heapSpanPages;
   free = 0;
   firstPage = firstFreePage;
-  
-  while (allPages--) 
+
+  while (allPages--)
     {
       if (pageHeap[firstFreePage] == NOHEAP)
 	{
@@ -1371,7 +1334,7 @@ allocatePages(int pages, CmmHeap *heap)
     CmmInit();			/* initialize heap, if not done yet */
   Cmm::incHeap = MAX(Cmm::incHeap, pages*bytesPerPage);
   firstPage = expandHeap(Cmm::incHeap);
-  if (firstPage == 0) 
+  if (firstPage == 0)
     {
       /* Can't do it */
       fprintf(stderr,
@@ -1383,7 +1346,7 @@ allocatePages(int pages, CmmHeap *heap)
   freePages -= pages;
   firstByte = pageToGCP(firstPage);
   int i = 1;
-  while (pages--) 
+  while (pages--)
     {
       pageHeap[firstPage+pages] = heap;
 #     if !HEADER_SIZE
@@ -1395,7 +1358,7 @@ allocatePages(int pages, CmmHeap *heap)
 }
 
 /*---------------------------------------------------------------------------*
- * -- DefaultHeap::reservePages
+ * -- DefaultHeap::getPages
  *
  * When alloc() is unable to allocate storage, it calls this routine to
  * allocate one or more pages.  If space is not available then the garbage
@@ -1406,23 +1369,20 @@ allocatePages(int pages, CmmHeap *heap)
  * Side effects: firstFreePage, firstFreeWord, freeWords, usedPages
  *---------------------------------------------------------------------------*/
 
-#define USED2FREE_RATIO 2
-
 GCP
-DefaultHeap::reservePages(int pages)
+DefaultHeap::getPages(int pages)
 {
   int firstPage;		/* Page # of first free page	*/
   int i;
-  
-  /* Garbage collect if not enough pages will be left for collection.	*/
-  
-  if (currentSpace == nextSpace /* not within CmmMove()  		*/
-      /* && usedPages - stablePages + pages
-	 > freePages + reservedPages - usedPages - pages */
+
+//#define NEW_GETPAGE bad: grows valla to 29063K
+#ifndef NEW_GETPAGE
+#define USED2FREE_RATIO 2
+  if (fromSpace == nextSpace /* not within CmmMove()  		*/
       && usedPages + pages
       > USED2FREE_RATIO * (freePages + reservedPages - usedPages - pages))  
-    // firstFreeWord is seen by the collector: it should not consider it as a root.
     collect();
+#endif
 
   /* Discard any remaining portion of current page */
   if (freeWords != 0)
@@ -1438,15 +1398,14 @@ DefaultHeap::reservePages(int pages)
   if (reservedPages - usedPages > reservedPages / 16)
     // not worth looking for the last few ones dispersed through the heap
     {
-      int free = 0;			/* # contiguous free pages	*/
+      int free = 0;		/* # contiguous free pages	*/
       int allPages = lastReservedPage - firstReservedPage;
       firstPage = firstUnusedPage;
       while (allPages--)
 	{
 	  if (pageHeap[firstUnusedPage] == this
-	      && pageSpace[firstUnusedPage] != currentSpace // in previous generation
-	      && pageIsUnstable(firstUnusedPage))	    // but not in stable set
-	    { 
+	      && inFreeSpace(firstUnusedPage))
+	    {
 	      if (++free == pages)
 		{
 		  firstFreeWord = pageToGCP(firstPage);
@@ -1521,13 +1480,20 @@ DefaultHeap::reservePages(int pages)
  * Side effects: firstFreeWord, freeWords
  *---------------------------------------------------------------------------*/
 
+// In principle we should collect when there are not enough pages to copy
+// FromSpace (usedPages - stablePages).
+// We guess that FromSpace will be reduced to less than 50%:
+#define USED2FREE_RATIO 2
+#define enoughPagesLeft(pages)     (usedPages + pages \
+				    <= USED2FREE_RATIO * (freePages + reservedPages - usedPages - pages))
+
 GCP
 DefaultHeap::alloc(unsigned long size)
 {
   GCP  object;			/* Pointer to the object */
-  
+
   size = bytesToWords(size);	// add size of header
-  
+
   /* Try to allocate from current page */
   if (size <= freeWords)
     {
@@ -1559,10 +1525,13 @@ DefaultHeap::alloc(unsigned long size)
 #       endif			// DOUBLE_ALIGN_OPTIMIZE
 #     endif			// ! HEADER_SIZE
     }
-  else if (size < onePageObjWords)
+  else if (size < maxSizePerPage)
     /* Object fits in one page with left over free space*/
     {
-      reservePages(1);
+#ifdef NEW_GETPAGES
+      if (! enoughPagesLeft(1)) collect();
+#endif
+      getPages(1);
       object = firstFreeWord;
       freeWords = freeWords - size;
       firstFreeWord = firstFreeWord + size;
@@ -1584,12 +1553,16 @@ DefaultHeap::alloc(unsigned long size)
 # endif
   else
     {
+      int pages =
 #     if HEADER_SIZE && defined(DOUBLE_ALIGN)
-      reservePages((size + wordsPerPage) / wordsPerPage);
+	(size + wordsPerPage) / wordsPerPage;
 #     else
-      reservePages((size + wordsPerPage - 1) / wordsPerPage);
+      (size + wordsPerPage - 1) / wordsPerPage;
 #     endif
-    
+#ifdef NEW_GETPAGES
+      if (! enoughPagesLeft(pages)) collect();
+#endif
+      getPages(pages);
       object = firstFreeWord;
       /* No object is allocated in final page after object > 1 page */
       if (freeWords != 0) {
@@ -1627,7 +1600,7 @@ isTraced(void *obj)
       )
     {
       int page = GCPtoPage(obj);
-      if (OUTSIDE_HEAP(page))
+      if (OUTSIDE_HEAPS(page))
 	return false;
     }
   return true;
@@ -1646,10 +1619,10 @@ void *
 CmmObject::operator new(size_t size, CmmHeap *heap)
 {
   GCP object = heap->alloc(size);
-  
+
   // To avoid problems in GC after new but during constructor
   *object = *((GCP)aCmmObject);
-  
+
   return (void *)object;
 }
 /*---------------------------------------------------------------------------*
@@ -1670,7 +1643,7 @@ void CmmObject::operator delete(void *obj)
 void *
 CmmObject::operator new[](size_t size, CmmHeap *heap)
 {
-	return sizeof(CmmVarObject) + (char*) (new(size, heap) CmmVarObject);
+  return sizeof(CmmVarObject) + (char*) (new(size, heap) CmmVarObject);
 }
 /*---------------------------------------------------------------------------*
  *
@@ -1680,7 +1653,7 @@ CmmObject::operator new[](size_t size, CmmHeap *heap)
 void
 CmmObject::operator delete[](void* obj)
 {
-	delete obj;
+  delete obj;
 }
 
 /*---------------------------------------------------------------------------*
@@ -1693,12 +1666,12 @@ void *
 CmmVarObject::operator new(size_t size, size_t extraSize, CmmHeap *heap)
 {
   size += extraSize;
-  
+
   GCP object = heap->alloc(size);
-  
+
   // To avoid problems in GC after new but during constructor
   *object = *((GCP)aCmmVarObject);
-  
+
   return (void *)object;
 }
 
@@ -1732,30 +1705,31 @@ nextObject(GCP xp)
 }
 
 /*---------------------------------------------------------------------------*
- * -- verifyObject
+ * -- verifyObject(cp, old)
  *
  * Verifies that a pointer points to an object in the heap.
+ * old means cp should be in FromSpace.
  * An invalid pointer will be logged and the program will abort.
  *
  *---------------------------------------------------------------------------*/
 
 static void
-verifyObject(GCP cp, int old)
+verifyObject(GCP cp, bool old)
 {
   int  page = GCPtoPage(cp);
   GCP  xp = pageToGCP(page);	/* Ptr to start of page */
   int  error = 0;
-  
+
   if (page < firstHeapPage) goto fail;
   error = 1;
   if (page > lastHeapPage) goto fail;
   error = 2;
   if (pageSpace[page] == UNALLOCATEDSPACE)  goto fail;
   error = 3;
-  if (old  &&  pageIsUnstable(page)  &&  pageSpace[page] != currentSpace)
+  if (old  &&  inFreeSpace(page))
     goto fail;
   error = 4;
-  if (old == 0  &&  pageSpace[page] != nextSpace)  goto fail; 
+  if (!old  &&  pageSpace[page] != nextSpace)  goto fail;
   error = 5;
   while (cp > xp + HEADER_SIZE)  xp = nextObject(xp);
   if (cp == xp + HEADER_SIZE)  return;
@@ -1790,13 +1764,13 @@ verifyHeader(GCP cp)
 # endif
   page = GCPtoPage(cp),
   error = 0;
-  
+
   if  FORWARDED(cp[-HEADER_SIZE])  goto fail;
   error = 1;
 # if HEADER_SIZE
   if ((unsigned)HEADER_TAG(cp[-HEADER_SIZE]) > 2)  goto fail;
 # endif
-  if (size <= onePageObjWords)  {
+  if (size <= maxSizePerPage)  {
     error = 2;
     if (cp - HEADER_SIZE + size > pageToGCP(page + 1))  goto fail;
   } else  {
@@ -1841,19 +1815,18 @@ static void
 logRoot(long* fp)
 {
   int  page = GCPtoPage(fp);
-  
+
   if (page < firstHeapPage
       || page > lastHeapPage
-      || pageSpace[page] == UNALLOCATEDSPACE
-      || (pageIsUnstable(page)  &&  pageSpace[page] != currentSpace))
+      || inFreeSpace(page))
     return;
-  
+
   int pages = pageGroup[page];
-  
+
   if (pages < 0) page += pages;
-  
+
   GCP  p1, p2 = pageToGCP(page);
-  
+
   while (p2 < (GCP)fp)
     {
       p1 = p2;
@@ -1875,20 +1848,24 @@ static void
 newlineIfLogging()
 {
   WHEN_VERBOSE ((CMM_DEBUGLOG | CMM_ROOTLOG | CMM_HEAPLOG),
-	      fprintf(stderr, "\n"));
+		fprintf(stderr, "\n"));
 }
 
 
 /*---------------------------------------------------------------------------*
- * -- UncollectedHeap::scanRoots
+ * -- UncollectedHeap::scanRoots(int page)
+ *
+ * Promotes pages referred by any allocated object inside "page".
+ * (Should be) Used by DefaultHeap to identify pointers from UncollectedHeap.
+ *
  *---------------------------------------------------------------------------*/
 void
 UncollectedHeap::scanRoots(int page)
 {
-	GCP start = pageToGCP(page);
-	GCP end = pageToGCP(page + 1);
-	GCP ptr;
+  GCP start = pageToGCP(page);
+  GCP end = pageToGCP(page + 1);
+  GCP ptr;
 
-	for (ptr = start; ptr < end; ptr++)
-	    promotePage(ptr);
+  for (ptr = start; ptr < end; ptr++)
+    promotePage(ptr);
 }

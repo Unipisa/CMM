@@ -33,9 +33,8 @@
 #  "clean"  removes all object code from this directory.
 #  "demo1", "demo2" etc. run various demonstration programs.
 
-CCFLAGS=-O2
-CC	= gcc
-CCC	= g++
+CFLAGS	= -O2
+CC	= g++
 
 HFILES = machine.h cmm.h
 
@@ -47,8 +46,8 @@ all: libCmm.a
 
 test : ${TESTS}
 	 @for i in ${TESTS}; do  \
-	   ( echo "Running " $$i "..."; \
-	     $$i >tests.out 2>&1 ;  \
+	   ( echo "Running " ./$$i "..."; \
+	     ./$$i >tests.out 2>&1 ;  \
 	   )                    \
 	done
 
@@ -59,39 +58,34 @@ libCmm.a: $(OBJS)
 	ranlib libCmm.a
 
 cmm.o: cmm.cc $(HFILES)
-	$(CC) $(CCFLAGS) -c cmm.cc
+	$(CC) $(CFLAGS) -c cmm.cc
 
 memory.o: memory.c $(HFILES)
-	$(CC) $(CCFLAGS) -c memory.c
+	$(CC) $(CFLAGS) -c memory.c
 
 tempheap.o: tempheap.cc tempheap.h $(HFILES)
-	$(CC) $(CCFLAGS) -c tempheap.cc
+	$(CC) $(CFLAGS) -c tempheap.cc
 
 msw.o: msw.cc msw.h $(HFILES)
-	$(CC) $(CCFLAGS) -c msw.cc
+	$(CC) $(CFLAGS) -c msw.cc
 
 test2:	test2.cc libCmm.a
-	$(CCC) $(CCFLAGS) -o test2 test2.cc libCmm.a
+	$(CC) $(CFLAGS) -o test2 test2.cc libCmm.a
 test3:	test3.cc libCmm.a
-	$(CCC) $(CCFLAGS) -o test3 test3.cc libCmm.a
+	$(CC) $(CFLAGS) -o test3 test3.cc libCmm.a
 test4:	test4.cc libCmm.a
-	$(CCC) $(CCFLAGS) -o test4 test4.cc libCmm.a 
+	$(CC) $(CFLAGS) -o test4 test4.cc libCmm.a 
 test5:	test5.cc libCmm.a
-	$(CCC) $(CCFLAGS) -o test5 test5.cc libCmm.a 
+	$(CC) $(CFLAGS) -o test5 test5.cc libCmm.a 
 test6:	test6.cc libCmm.a
-	$(CCC) $(CCFLAGS) -o test6 test6.cc libCmm.a 
+	$(CC) $(CFLAGS) -o test6 test6.cc libCmm.a 
 test8:	test8.cc libCmm.a
-	$(CCC) $(CCFLAGS) -o test8 test8.cc libCmm.a 
+	$(CC) $(CFLAGS) -o test8 test8.cc libCmm.a 
 testp2: testp2.c libCmm.a
-	${CC} ${CFLAGS} -g -o testp2 testp2.c libCmm.a
+	$(CC) $(CFLAGS) -g -o testp2 testp2.c libCmm.a
 testp3: testp3.c libCmm.a
-	${CC} ${CFLAGS} -g -o testp3 testp3.c libCmm.a
+	$(CC) $(CFLAGS) -g -o testp3 testp3.c libCmm.a
 testp5: testp5.cc libCmm.a
-	${CXX} ${OPTS} -o testp5 ${CCFLAGS} testp5.cc libCmm.a
-demo1:	demo1.cc libCmm.a
-	$(CCC) $(CCFLAGS) -o demo1 demo1.cc libCmm.a 
-demo2:	demo2.cc libCmm.a 
-	$(CCC) $(CCFLAGS) -o demo2 demo2.cc libCmm.a 
-
+	$(CC) $(CFLAGS) -o testp5 testp5.cc libCmm.a
 clean:
 	/bin/rm -rf *.o $(TESTS) libCmm.a

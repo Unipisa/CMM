@@ -1,7 +1,127 @@
+Sun Nov 24 19:13:45 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cpp: changes for WIN32:
+	- set_new_handler does not work
+	- pageLink initialized to 0
+	- firstHeapPage moved to memory.c to be seen as extern "C"
+	- new[] and delete[] not supported
+	- isTraced to be fixed
+
+Wed Oct 30 12:01:12 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h (_CmmInit):	*** WARNING ***
+	Changed initialization protocol:
+	Cmm::theMSHeap is always created, to use MSW one must assign
+		Cmm::heap = Cmm::theMSHeap
+
+	* cmm.h: eliminated typedef int bool
+
+	* msw.cc: declared static:
+	tempHeapInfo, mustResetTempHeap, noCollection, collectSerial,
+	freeSerial, allocSerial, totFreeFixedMem, totFreeFPages, sweptBytes,
+	markedBytes
+
+	* cmm.h, msw.h, msw.cc, README, testp3.c, testp5.cc:
+	eliminated option MSW_OnDemand
+
+	* cmm.h (class MarkAndSweep): eliminated collectNow
+
+Sun Oct 27 12:29:23 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.c: revised MARKING algorithm: it distinguishes pages already
+	scanned by collector to avoid recursive traversal: 30% improvement
+	in number of calls to scavenge, 50% reduction of time in scavenge.
+	The new MARKING algorithm saves between 20 to 40% of space.
+
+	* cmm.h, cmm.cc: revised generational mechanism.
+	See explanation in cmm.h.
+
+Fri Oct 25 09:02:18 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h, cmm.cc: merged PoSSo and DEC copyright notices.
+
+Thu Oct 24 16:29:42 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h: moved inFromSpace, inFreeSpace, inStableSpace to cmm.cc
+
+	* machine.h: reinstated bzero for SunOS 4: twice as fast as memset
+
+Thu Oct 17 12:23:27 1996  Giuseppe Attardi  <attardi@omega>
+
+	* test2.cc, test3.cc, test4.cc: updated heap initialization
+
+	* msw.cc: merged with Iglio version for CAR.
+
+Sat Sep 21 21:08:02 1996  Giuseppe Attardi  <attardi@di.unipi.it>
+
+	* machine.h: added flag __CYGWIN32__ for gcc-win32
+
+Sat Aug 24 12:57:52 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h, cmm.cc: renamed
+	FromSpace -> FreeSpace
+	ToSpace -> FromSpace
+
+Thu Aug 22 20:01:45 1996  Tito Flagella  <tito@memphis>
+
+       * cmm.h: added #ifndef PL_GROEBNER for bool definition. The PL
+       considers bool as a builtin C++ type.
+
+Sat Aug 10 14:29:06 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cc: restored identifier for StableSpace to toSpace+1
+	(using 0 seemed to reduce performance)
+
+Fri Aug  9 20:01:09 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cc (getPages): moved test for invocation of collector
+	to alloc(), so we need not to distinguish calls to getPages from
+	alloc() and from CmmMove().
+
+Thu Aug  8 18:38:49 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.cc (scavenge): moved here from CmmMove traversal of unmarked
+	objects in promoted (but unscanned) pages
+
+	* cmm.h: renamed
+	OUTSIDE_HEAP -> OUTSIDE_HEAPS
+
+	* cmm.cc: Stable pages have all pageSpace = 0.
+	Eliminated: nextSpace, currentSpace, pageIsStable, pageIsUnStable
+	Introduced: toSpace, whichSpace, inFromSpace, inToSpace, inStableSpace.
+
+	renamed:
+	emptyStableSet -> emptyStableSpace
+
+Tue Aug  6 11:39:19 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h: renamed
+	reservePages -> getPages
+	SetForward -> setForward
+	GetForward -> getForward
+
+	* msw.cc: renamed
+	mswReservePages -> mswGetPages
+	heapStartPtr -> heapStart
+	heapEndPtr -> heapEnd
+	stackStartPtr -> stackStart
+	stackEndPtr -> stackEnd
+	dataStartPtr -> dataStart
+	dataEndPtr -> dataEnd
+
 Thu Jun  6 11:07:03 1996  Giuseppe Attardi  <attardi@omega>
 
 	* msw.cc: split mswDEBUG into mswDEBUG and mswVERBOSE.
 	This one is used to print out info on amount collected
+
+	Replaced:
+	INDEX_FROM_PTR with GCPtoPage
+	PAGE_FROM_INDEX with (Ptr)pageToGCP
+	gcOut with stdout
+
+	renamed:
+	PAGE_INFO_FROM_PTR -> PAGE_INFO
+	PAGE_SPACE_FROM_PTR -> PAGE_START
 
 Fri Apr 19 19:01:06 1996  Giuseppe Attardi  <attardi@omega>
 

@@ -38,7 +38,8 @@ block::block(block* ptr, int x)
 void
 makeheap(int initial, int final, int inc)
 {
-	Cmm  heap(initial*MB, final*MB, inc*MB, 0, 1, CMM_STATS);
+  Cmm dummy(initial*MB, final*MB, inc*MB,
+	    0, 1, CMM_GCTHRESHOLD, CMM_FLAGS, 0);
 }
 
 main(int argc, char* argv[])

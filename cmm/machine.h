@@ -58,8 +58,8 @@ typedef long *		GCP;	/* Pointer to a garbage collected object */
 #    define C_LANG          
 #endif
 
-#ifdef __GNUC__
-extern C_LANG  void  bzero(void *, int);
+#if defined(__sun__) && !defined(__svr4__)
+extern C_LANG void	bzero(void *, int);
 #else
 #include <string.h>
 #define bzero(s, n)	memset(s, 0, n)
@@ -73,16 +73,13 @@ extern C_LANG  void  bzero(void *, int);
 #define MAX(a,b) (((a)>(b))?(a):(b))
 #endif
 
-#if defined(__svr4__) || defined(__WIN32__)
+#if defined(__svr4__) || defined(_WIN32)
 #   define _setjmp  setjmp
 #   define _longjmp longjmp
 #endif
 
-#ifndef __BORLANDC__
-# ifdef __cplusplus
-  extern "C"
-# endif
-	void* sbrk(int);
+#if !defined(__BORLANDC__) && !defined(_WIN32)
+extern C_LANG void* sbrk(int);
 #endif
 
 /*---------------------------------------------------------------------------*
@@ -138,13 +135,13 @@ extern C_LANG  void  bzero(void *, int);
 
 #   if defined(MSDOS) && defined(GO32)
 #       define STACKBOTTOM (0x80000000)
-#   elif defined(__WIN32__)
+#   elif defined(_WIN32)
 #       define STACKBOTTOM CmmGetStackBase()
 #   else
 #       define STACKBOTTOM (0xc0000000)
 #   endif
 
-#elif defined(__BORLANDC__) && defined(__WIN32__)
+#elif defined(__BORLANDC__) && defined(_WIN32)
 #   define word     WORD
     void* sbrk(int i) { return NULL; }
     char etext;

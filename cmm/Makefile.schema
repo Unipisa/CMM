@@ -20,8 +20,8 @@ library:
 
 test : ${TESTS}
 	 @for i in ${TESTS}; do  \
-	   ( echo "Running " $$i "..."; \
-	     $$i >tests.out 2>&1 ;  \
+	   ( echo "Running " ./$$i "..."; \
+	     ./$$i >tests.out 2>&1 ;  \
 	   )                    \
 	done
 
@@ -44,43 +44,31 @@ stamp:
 	mv tmp.cc cmm.cc
 
 test2:	test2.cc libCmm.a
-	${CXX} -o test2 ${CFLAGS} test2.cc libCmm.a
+	${CPP} -o test2 ${CFLAGS} test2.cc libCmm.a
 
 test3:	test3.cc libCmm.a
-	${CXX} -o test3 ${CFLAGS} test3.cc libCmm.a
+	${CPP} -o test3 ${CFLAGS} test3.cc libCmm.a
 
 test4:	test4.cc libCmm.a
-	${CXX} -o test4 ${CFLAGS} test4.cc libCmm.a 
+	${CPP} -o test4 ${CFLAGS} test4.cc libCmm.a 
 
 test5:	test5.cc libCmm.a
-	${CXX} -o test5 ${CFLAGS} test5.cc libCmm.a 
+	${CPP} -o test5 ${CFLAGS} test5.cc libCmm.a 
 
 test6:	test6.cc libCmm.a
-	${CXX} -o test6 ${CFLAGS} test6.cc libCmm.a 
+	${CPP} -o test6 ${CFLAGS} test6.cc libCmm.a 
 
 test7:	test7.cc libCmm.a
-	${CXX} -o test7 ${CFLAGS} test7.cc libCmm.a 
+	${CPP} -o test7 ${CFLAGS} test7.cc libCmm.a 
 
 testp2: testp2.c libCmm.a
-	${CXX} -g -o testp2 ${CFLAGS} testp2.c libCmm.a
+	${CPP} -g -o testp2 ${CFLAGS} testp2.c libCmm.a
 
 testp3: testp3.c libCmm.a
-	${CXX} -g -o testp3 ${CFLAGS} testp3.c libCmm.a
+	${CPP} -g -o testp3 ${CFLAGS} testp3.c libCmm.a
 
 testp5: testp5.cc libCmm.a
-	${CXX} ${OPTS} -o testp5 ${CFLAGS} testp5.cc libCmm.a
-
-demo1:	demo1.cc libCmm.a 
-	${CXX} -o demo1 ${CFLAGS} demo1.cc libCmm.a 
-
-demo2:	demo2.cc libCmm.a 
-	${CXX} -o demo2 ${CFLAGS} demo2.cc libCmm.a 
-
-tar:
-	mv Makefile.dist makefile
-	(cd ..; \
-	tar cf cmm.tar cmm/{Copy*,README,*.h,*.c,*.cc,makefile,doc})
-	mv makefile Makefile.dist
+	${CPP} ${OPTS} -o testp5 ${CFLAGS} testp5.cc libCmm.a
 
 .Makefile:
 	set DIR=`pwd`; cd $(TOP); make SUBDIRS=$$DIR Makefiles

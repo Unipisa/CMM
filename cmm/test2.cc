@@ -1,8 +1,7 @@
-/* The following program tests the ability of the garbage collector to correct
-   derived pointers and pointers in the non-garbage collected heap.
-*/
-
-/* Externals */
+/*
+ * The following program tests the ability of the garbage collector to detect
+ * pointers to CmmObjects from the uncollected heap.
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,57 +10,54 @@
 /* Cell type to build a list with. */
 
 struct  cell : CmmObject  {
-  cell  *next;
-  int* value1;
+  cell *next;
+  int  *value1;
   int  value2;
-  cell();
-  void traverse();
+
+  cell()
+    {
+      next = 0;
+      value1 = 0;
+    }
+
+  void traverse()
+    {
+      CmmHeap *heap = Cmm::heap;
+      heap->scavenge((CmmObject **)&next);
+      heap->scavenge((CmmObject **)&value1);
+    }
 };
-
-void
-cell::traverse()
-{
-  CmmHeap *heap = Cmm::heap;
-  heap->scavenge((CmmObject **)&next);
-  heap->scavenge((CmmObject **)&value1);
-}
-
-cell::cell()
-{
-  next = 0;
-  value1 = 0;
-}
 
 typedef  cell* cellptr;
 
-/* Dynamic array of cellptr's that is not garbage collected */
+#define TOT	50000
 
 struct  cella  {
-  cellptr ptr[50000];
+  cellptr ptr[TOT];
 };
 
-Cmm  dummy(1048576, 2147483647, 1048576, 35, 30, CMM_HEAPROOTS+CMM_STATS,
-	   0, 0);
+Cmm dummy(CMM_MINHEAP, CMM_MAXHEAP, CMM_INCHEAP, CMM_GENERATIONAL,
+	  CMM_INCPERCENT, CMM_GCTHRESHOLD, CMM_HEAPROOTS | CMM_STATS, 0);
 
 main()
 {
-	cella*  pointers = new cella;
-	cellptr  cl = 0, cp;
+	cella*  pointers = new cella; // allocated in uncollected heap
+	cellptr cl = NULL, cp;
 	int i;
 
-	/* Allocate 50000 cells referenced by an array in the non-gc heap */
-	for  (i = 0; i < 50000; i++)  {
+	/* Allocate TOT cells referenced from array pointers */
+	for  (i = 0; i < TOT; i++)  {
 	   cp = new cell;
 	   pointers->ptr[i] = cp;
 	   cp->value1 = 0;
 	   cp->value2 = i;
 	}
 
-	/* Make a list of 50000 cells that each point into themseleves. */
-	for  (i = 0; i < 50000; i++)  {
-	   cp = new cell;
-	   cp = new cell;
-	   cp = new cell;
+	/* Make a list of TOT cells, each pointing to itself */
+	for  (i = 0; i < TOT; i++)  {
+	   cp = new cell;	// garbage
+	   cp = new cell;	// garbage
+	   cp = new cell;	// garbage
 	   cp = new cell;
 	   cp->next = cl;
 	   cp->value1 = &cp->value2;
@@ -69,15 +65,19 @@ main()
 	   cl = cp;
 	}
 
-	/* Verify that objects referenced by pointers still exist */
-	for  (i = 0; i < 50000; i++)  {
-	   if  (pointers->ptr[i]->value2 != i)  abort();
-	}
+	/* Verify that cells referenced from pointers still exist */
+	for  (i = 0; i < TOT; i++)
+	  if (pointers->ptr[i]->value2 != i) {
+	    fprintf(stderr, "cell %d not valid\n", i);
+	    abort();
+	  }
 
-	/* Verify that cell list is correct correct */
-	for  (i = 0; i < 50000; i++)  {
-	   if  (cl->value2 != *(cl->value1))  abort();
-	   cl = cl->next;
+	/* Verify that cell list is still correct */
+	for  (i = 0; i < TOT; i++)  {
+	  if  (cl->value2 != *cl->value1) {
+	    fprintf(stderr, "cell list damaged\n");
+	    abort();
+	  }
+	  cl = cl->next;
 	}
-	exit(0);
 }

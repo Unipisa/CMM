@@ -59,14 +59,16 @@ little_cell::little_cell()
 
 typedef  little_cell* lp;
 
-Cmm  dummy(1048576, 2147483647, 1048576, 50, 45, CMM_STATS);
+Cmm dummy(CMM_MINHEAP, CMM_MAXHEAP, CMM_INCHEAP, 50, 45,
+	  CMM_GCTHRESHOLD, CMM_FLAGS, 0);
 
 main()
 {
 	bp  bl = 0, b1, b2;
 	lp  ll = 0, l1, l2;
+	int i;
 
-	for  (int i = 1; i <= 7000; i++)  {
+	for  (i = 1; i <= 7000; i++)  {
 	   b1 = new big_cell;
 	   l1 = new little_cell;
 	   b2 = new big_cell;

@@ -8,6 +8,7 @@
  *		Corso Italia 40
  *		I-56125 Pisa, Italy
  *
+ *  Copyright (C) 1990 Digital Equipment Corporation.
  *  Copyright (C) 1993, 1994, 1995 Giuseppe Attardi and Tito Flagella.
  *
  *  This file is part of the PoSSo Customizable Memory Manager (CMM).
@@ -21,11 +22,11 @@
  * Users of this software agree to the terms and conditions set forth herein,
  * and agree to license at no charge to all parties under these terms and
  * conditions any derivative works or modified versions of this software.
- * 
+ *
  * This software may be distributed (but not offered for sale or transferred
  * for compensation) to third parties, provided such third parties agree to
- * abide by the terms and conditions of this notice.  
- * 
+ * abide by the terms and conditions of this notice.
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE COPYRIGHT HOLDERS DISCLAIM ALL
  * WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL THE COPYRIGHT HOLDERS
@@ -35,46 +36,6 @@
  * OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  *---------------------------------------------------------------------------*/
-
-/*
- *              Copyright 1990 Digital Equipment Corporation
- *                         All Rights Reserved
- *
- * Permission to use, copy, and modify this software and its documentation is
- * hereby granted only under the following terms and conditions.  Both the
- * above copyright notice and this permission notice must appear in all copies
- * of the software, derivative works or modified versions, and any portions
- * thereof, and both notices must appear in supporting documentation.
- *
- * Users of this software agree to the terms and conditions set forth herein,
- * and hereby grant back to Digital a non-exclusive, unrestricted, royalty-free
- * right and license under any changes, enhancements or extensions made to the
- * core functions of the software, including but not limited to those affording
- * compatibility with other hardware or software environments, but excluding
- * applications which incorporate this software.  Users further agree to use
- * their best efforts to return to Digital any such changes, enhancements or
- * extensions that they make and inform Digital of noteworthy uses of this
- * software.  Correspondence should be provided to Digital at:
- * 
- *                       Director of Licensing
- *                       Western Research Laboratory
- *                       Digital Equipment Corporation
- *                       250 University Avenue
- *                       Palo Alto, California  94301  
- * 
- * This software may be distributed (but not offered for sale or transferred
- * for compensation) to third parties, provided such third parties agree to
- * abide by the terms and conditions of this notice.  
- * 
- * THE SOFTWARE IS PROVIDED "AS IS" AND DIGITAL EQUIPMENT CORP. DISCLAIMS ALL
- * WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL DIGITAL EQUIPMENT
- * CORPORATION BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
- * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
- * ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
- * SOFTWARE.
- */
 
 /*---------------------------------------------------------------------------*
 
@@ -169,15 +130,37 @@
    Pointers to garbage collected objects MAY BE passed as arguments or stored
    in static storage.
 
-   Pointers to garbage collected objects MAY NOT be stored in dynamically 
+   Pointers to garbage collected objects MAY NOT be stored in dynamically
    allocated objects that are not garbage collected, UNLESS one has specified
-   the GCHEAPROOTS flag in a Cmm declaration, OR declared that region as
+   the CMM_HEAPROOTS flag in a Cmm declaration, OR declared that region as
    a root via a call to gcRoots.
 
    Pointers to garbage collected objects contained in garbage collected objects
    MUST always point outside the garbage collected heap or to a garbage
    collected object.  To assure this, storage is zeroed at object creation
    time.
+
+   Almost Generational Collection
+   ------------------------------
+
+   The CMM DefaultHeap is logically split into three spaces: FreeSpace,
+   FromSpace, and StableSpace. New objects are allocated in FromSpace,
+   collection moves live objects from FromSpace to StableSpace, tracing but not
+   touching objects already in StableSpace, then FromSpace is merged into
+   FreeSpace and FromSpace is restarted as empty. Once in a while, when
+   generational collection cannot recover a certain percentage (65% by
+   default) of available memory, a full collection is done, by merging
+   StableSpace into FromSpace.
+
+   To implement these logical spaces, the space-identifier for pages is used.
+   A counter fromSpace is maintained, which starts at 3 and is incremented
+   after each collection. FromSpace is represented by pages with
+   space-identifier equal to fromSpace, StableSpace is represented by pages
+   with space-identifier = 0, FreeSpace consists of the remaining
+   pages. During collection, objects are copied to pages, either new or
+   recycled from FreeSpace, whose identifier is set equal to 0, thereby
+   extending StableSpace.
+   A space-identifier = 1 is used by MARKING version of collector.
 
    Sizing the heap
    ---------------
@@ -267,12 +250,6 @@
 
 #ifndef _CMM_H
 #define _CMM_H
-
-#ifndef bool
-typedef int	bool;
-#define false	0
-#define true	1
-#endif
 
 #include <stdio.h>		/* Streams are not used as they might not be
 				   initialized when needed. */
@@ -369,10 +346,10 @@ const	CMM_TSTOBJ   =   2;	/* Extensively test objects		*/
  *
  * -- Object Headers
  *
- *---------------------------------------------------------------------------*/
-/*
  * Object have headers if HEADER_SIZE is not 0
- */
+ *
+ *---------------------------------------------------------------------------*/
+
 #define HEADER_SIZE	1	/* header size in words */
 
 #if HEADER_SIZE
@@ -384,11 +361,8 @@ const	CMM_TSTOBJ   =   2;	/* Extensively test objects		*/
 #define maxHeaderWords 0xFFFFF		/* 1048575 = 4,194,300 bytes */
 #define FORWARDED(header) (((header) & 1) == 0)
 #else
-/* an object is forwarded if it is marked as live and contained
- * in a non-promoted page.
- */
-#define FORWARDED(gcp) ((MARKED(gcp) && \
-			 pageSpace[GCPtoPage(gcp)] == currentSpace))
+/* an object is forwarded if it is marked as live and contained in FromSpace */
+#define FORWARDED(gcp) ((MARKED(gcp) && inFromSpace(GCPtoPage(gcp))))
 #define MAKE_HEADER(words, tag)		
 #endif
 
@@ -404,7 +378,7 @@ const	CMM_TSTOBJ   =   2;	/* Extensively test objects		*/
 
 #define MARKING
 /*
- * The base address of CmmObject's is noted in the objectMap bit map.  This 
+ * The base address of CmmObject's is noted in the objectMap bit map.  This
  * allows CmmMove() to rapidly detect a derived pointer and convert it into an
  * object and an offset.
  */
@@ -474,40 +448,33 @@ extern int   freePages;		/* # of pages not yet allocated		*/
 #   define bytesToWords(x) (((x) < 16) ? \
 			    (((x) + bytesPerWord-1) / bytesPerWord) : \
 			    (((x) + 2*bytesPerWord-1) / (2*bytesPerWord) * 2))
-#  else // !DOUBLE_ALIGN_OPTIMIZE
+#  else
 #   define bytesToWords(x) (((x) + 2*bytesPerWord-1) / (2*bytesPerWord) * 2)
 #  endif // !DOUBLE_ALIGN_OPTIMIZE
 #endif
 
-/* Page space values */
-
-#define pageIsStable(x) 	(! pageIsUnstable(x))
-#define pageIsUnstable(x) 	(pageSpace[x] & 1)
-#define UNALLOCATEDSPACE	1 /* neither current nor stable	*/
-#define PROMOTEDSPACE		0 /* page being promoted	*/
-#define SCANNED(page)		(pageSpace[page] == nextSpace)
-#define SET_SCANNED(page)	(pageSpace[page] = nextSpace)
-
 #define NOHEAP NULL
 #define UNCOLLECTEDHEAP ((CmmHeap *)1)
 
-#define OUTSIDE_HEAP(page) \
+#define OUTSIDE_HEAPS(page) \
 	(page < firstHeapPage || page > lastHeapPage || \
 	 pageHeap[page] == UNCOLLECTEDHEAP)
 
 #define HEAPPERCENT(x) (((x)*100)/(Cmm::theDefaultHeap->reservedPages \
 			+ freePages))
 
-/* Default heap configuration */
+/*---------------------------------------------------------------------------*
+ * -- Default heap configuration
+ *---------------------------------------------------------------------------*/
 
-const int  CMM_MINHEAP      = 131072; /* # of bytes of initial heap	*/
-const int  CMM_MAXHEAP      = 2147483647; /* # of bytes of the final heap */
-const int  CMM_INCHEAP      = 1048576;    /* # of bytes of each increment */
-const int  CMM_GENERATIONAL = 35;	  /* % allocated to force total
-					   collection		       	*/
-const int  CMM_GCTHRESHOLD  = 6000000; /* Heap size before MSW starts GC */
-const int  CMM_INCPERCENT   = 25;     /* % allocated to force expansion */
-const int  CMM_FLAGS        = 0;      /* option flags			*/
+const int CMM_MINHEAP      = 131072;     /* # of bytes of initial heap	 */
+const int CMM_MAXHEAP      = 2147483647; /* # of bytes of the final heap */
+const int CMM_INCHEAP      = 1048576;    /* # of bytes of each increment */
+const int CMM_GENERATIONAL = 35;	 /* % allocated to force total
+					   collection		       	 */
+const int CMM_GCTHRESHOLD  = 6000000; /* Heap size before MSW starts GC  */
+const int CMM_INCPERCENT   = 25;      /* % allocated to force expansion  */
+const int CMM_FLAGS        = 0;       /* option flags			 */
 
 /*---------------------------------------------------------------------------*
  * -- Static Memory Areas
@@ -629,14 +596,14 @@ CmmObject *basePointer(GCP);
 class DefaultHeap: public CmmHeap
 {
 public:
-  
+
   DefaultHeap();
   GCP alloc(unsigned long);
   void reclaim(GCP) {}		// Bartlett's delete does nothing.
   void collect();		// the default garbarge collector
   void scavenge(CmmObject **ptr);
-  GCP  reservePages(int);
-  
+  GCP  getPages(int);
+
   int usedPages;		// pages in actual use
   int reservedPages;		// pages reserved for this heap
   int stablePages;		// # of pages in the stable set
@@ -651,7 +618,7 @@ public:
  *
  *---------------------------------------------------------------------------*/
 
-class MarkAndSweep : public CmmHeap 
+class MarkAndSweep : public CmmHeap
 {
 
  public:
@@ -660,7 +627,6 @@ class MarkAndSweep : public CmmHeap
   					       { return (GCP) mswAlloc(size); }
   inline void 		reclaim	(GCP p)        { mswFree(p); }
   inline void 		collect	()	       { mswCollect(); }
-  inline void 		collectNow()	       { mswCollectNow(); }
   inline void*		realloc (void * p, unsigned long size)
                               { return mswRealloc(p, size); }
   inline void*		calloc  (unsigned long n, unsigned long size)
@@ -668,11 +634,10 @@ class MarkAndSweep : public CmmHeap
 
   inline void		checkHeap()		{ mswCheckHeap(1); }
   inline void		showInfo()		{ mswShowInfo(); }
-  
-  MarkAndSweep(unsigned mode = MSW_Automatic)
+
+  MarkAndSweep()
     {
-      Cmm::theMSHeap = this;
-      mswInit(mode);
+      mswInit();
     }
 
   void			tempHeapStart ()	{ mswTempHeapStart(); }
@@ -720,18 +685,18 @@ public:
 #if HEADER_SIZE
       return FORWARDED(((GCP)this)[-HEADER_SIZE]);
 #else
-      extern int currentSpace;
+      extern int fromSpace;
       return FORWARDED(((GCP)this));
 #endif
     }
-  inline void SetForward(CmmObject *ptr)
+  inline void setForward(CmmObject *ptr)
     {
 #if !HEADER_SIZE
       MARK(this);
 #endif
       ((GCP)this)[-HEADER_SIZE] = (int)ptr;
     }
-  inline CmmObject *GetForward()
+  inline CmmObject *getForward()
     {
       return (CmmObject *) ((GCP)this)[-HEADER_SIZE];
     }
@@ -745,7 +710,7 @@ public:
 
 };
 
-class CmmVarObject: public CmmObject 
+class CmmVarObject: public CmmObject
 {
 public:
   void* operator new(size_t, size_t = (size_t)0, CmmHeap* = Cmm::heap);
@@ -760,7 +725,7 @@ public:
 // Class CmmArray must be used to create arrays of CmmObject's as follows:
 //
 //       CmmArray<MyClass> & MyVector = * new (100) CmmArray<MyClass> ;
-//       
+//
 // Then you can use the [] operator to get CmmObjects as usual.
 // Ex:
 //       MyVector[i]->print();
@@ -794,7 +759,7 @@ public:
 	}
       return res;
     }
-  
+
   ~CmmArray()
     {
       size_t i;
@@ -802,9 +767,9 @@ public:
       for (i = 1; i < count; ++i)
 	ptr[i].~T();
     }
-  
+
   T & operator[](unsigned int index) { return ptr[index]; }
-  
+
   void traverse()
     {
       unsigned int count = ((size() - sizeof(CmmArray)) / sizeof(T)) + 1;
@@ -812,7 +777,7 @@ public:
 	if (((int*)ptr)[i])
 	  ptr[i].traverse();
     }
-  
+
 private:
   T ptr[1];
 };
@@ -845,19 +810,15 @@ public:
   _CmmInit()
     {
       extern void CmmInitEarly();
-      
+
       if (Cmm::theDefaultHeap == 0) {
 	CmmInitEarly();
-	
-	Cmm::theDefaultHeap = new DefaultHeap;
 
-#	if defined(PL_CMM_USE_MSW)
- 		Cmm::heap = ::new MarkAndSweep();
-#	else
-		Cmm::heap = Cmm::theDefaultHeap;
-#	endif
+	Cmm::theUncollectedHeap = ::new UncollectedHeap;
+        Cmm::theDefaultHeap = ::new DefaultHeap;
+	Cmm::theMSHeap = ::new MarkAndSweep;
 
-	Cmm::theUncollectedHeap = new UncollectedHeap;
+	Cmm::heap = Cmm::theDefaultHeap;
       }
     }
   ~_CmmInit() {};		// destroy _DummyCmmInit after loading cmm.h

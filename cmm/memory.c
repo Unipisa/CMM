@@ -39,30 +39,19 @@
 #include <stdio.h>
 #include "machine.h"
 
-Word stackBottom;	/* The base of the stack	*/
-
-void
-CmmSetStackBottom(Word bottom)
-{
-#   ifdef STACKBOTTOM
-	stackBottom = (Word) STACKBOTTOM;
-#   else
-#     define STACKBOTTOM_ALIGNMENT_M1 0xffffff
-#     ifdef STACK_GROWS_DOWNWARD
-      stackBottom = (bottom + STACKBOTTOM_ALIGNMENT_M1)
-	& ~STACKBOTTOM_ALIGNMENT_M1;
-#     else
-      stackBottom = bottom & ~STACKBOTTOM_ALIGNMENT_M1;
-#     endif
-#   endif
-}
-
 /*---------------------------------------------------------------------------*
  * -- MS Windows
  *---------------------------------------------------------------------------*/
-#ifdef __WIN32__
+#ifdef _WIN32
 
-/* Code contributed by H. Boehm of Xerox PARC */
+/* Code contributed by H. Boehm of Xerox PARC
+   Modified by G. Attardi
+
+   Under win32, all writable pages outside of the heaps and stack are
+   scanned for roots.  Thus the collector sees pointers in DLL data
+   segments.  Under win32s, only the main data segment is scanned.
+
+ */
 /*
  * Copyright (c) 1991-1994 by Xerox Corporation.  All rights reserved.
  *
@@ -78,6 +67,21 @@ CmmSetStackBottom(Word bottom)
 
 #include <windows.h>
 
+# ifdef __CYGWIN32__
+  /* from Win32API */
+typedef void *PVOID;
+typedef const void *LPCVOID;
+typedef struct _MEMORY_BASIC_INFORMATION { 
+  PVOID BaseAddress;            
+  PVOID AllocationBase;         
+  DWORD AllocationProtect;      
+  DWORD RegionSize;             
+  DWORD State;                  
+  DWORD Protect;                
+  DWORD Type;                   
+} MEMORY_BASIC_INFORMATION; 
+typedef MEMORY_BASIC_INFORMATION *PMEMORY_BASIC_INFORMATION; 
+# endif
 
 /* Get the page size.	*/
 static unsigned long CmmPageSize = 0;
@@ -156,7 +160,7 @@ CmmLeastDescribedAddress(char * start)
   
   GetSystemInfo(&sysinfo);
   limit = sysinfo.lpMinimumApplicationAddress;
-  p = (char *)((word)start & ~(CmmGetPageSize() - 1));
+  p = (char *)((unsigned long)start & ~(CmmGetPageSize() - 1));
   for (;;) {
   	q = (LPVOID)(p - CmmGetPageSize());
   	if ((char *)q > (char *)p /* underflow */ || q < limit) break;
@@ -170,8 +174,7 @@ CmmLeastDescribedAddress(char * start)
 void
 CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
 {
-  static char dummy;
-  char * static_root = &dummy;
+  static char static_root;
   MEMORY_BASIC_INFORMATION buf;
   SYSTEM_INFO sysinfo;
   DWORD result;
@@ -183,7 +186,7 @@ CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
 
   /* Check that this is not NT, and Windows major version <= 3	*/
   if (!((v & 0x80000000) && (v & 0xff) <= 3))
-    return 0;
+    return;
   /* find base of region used by malloc()	*/
   if (mallocHeapBase == 0) {
     extern int  firstHeapPage;
@@ -194,7 +197,7 @@ CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
     }
     mallocHeapBase = (char *)(buf.AllocationBase);
   }
-  p = base = limit = CmmLeastDescribedAddress(static_root);
+  p = base = limit = CmmLeastDescribedAddress(&static_root);
   GetSystemInfo(&sysinfo);
   while (p < sysinfo.lpMaximumApplicationAddress) {
     result = VirtualQuery(p, &buf, sizeof(buf));
@@ -229,4 +232,26 @@ CmmExamineStaticAreas(void (*ExamineArea)(GCP, GCP))
   (*ExamineArea)((GCP)DATASTART, (GCP)&end);
 }
 
-#endif /* __WIN32__ */
+#endif /* _WIN32 */
+
+/*---------------------------------------------------------------------------*
+ * -- Stack Bottom
+ *---------------------------------------------------------------------------*/
+
+Word stackBottom;	/* The base of the stack	*/
+
+void
+CmmSetStackBottom(Word bottom)
+{
+#   ifdef STACKBOTTOM
+	stackBottom = (Word) STACKBOTTOM;
+#   else
+#     define STACKBOTTOM_ALIGNMENT_M1 0xffffff
+#     ifdef STACK_GROWS_DOWNWARD
+      stackBottom = (bottom + STACKBOTTOM_ALIGNMENT_M1)
+	& ~STACKBOTTOM_ALIGNMENT_M1;
+#     else
+      stackBottom = bottom & ~STACKBOTTOM_ALIGNMENT_M1;
+#     endif
+#   endif
+}
