@@ -34,7 +34,9 @@ extern "C"  void  bzero(void *, int);
 #define _longjmp longjmp
 #endif
 
+#ifndef hp9000s800
 #define STACK_GROWS_DOWNWARD
+#endif
 
 /***********************************************************************/
 /* Architectures requiring double alignement for objects               */

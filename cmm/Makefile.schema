@@ -68,10 +68,10 @@ demo1:	demo1.C libCmm.a
 demo2:	demo2.C libCmm.a 
 	$(CXX) $(CXXFLAGS) -o demo2 demo2.C libCmm.a 
 
+DIR = `basename ${PWD}`
 tar:
 	mv Makefile.dist makefile
-	cd ..
-	tar cf cmm-1.0.tar cmm/{Copy*,README,*.H,*.C,makefile,doc}
+	tar cf $(DIR).tar $(DIR)/{Copy*,README,*.H,*.C,makefile,doc}
 	mv makefile Makefile.dist
 
 tidy:
