@@ -1,12 +1,13 @@
-#include "HeapStack.H"
+#include "heapstack.h"
+#include <iostream.h>
 
-class MyClass : GcObject 
+class MyClass : public GcObject 
 {
   int x;
   MyClass *y;
 public:
   void test() { cout << "Testing ... Ok\n" ; }
-  void traverse() { CmmHeap::heap->scavenge((GcObject **)&y); }
+  void traverse() { Cmm::heap->scavenge((GcObject **)&y); }
 };
 
 
@@ -15,7 +16,7 @@ main()
   MyClass *MyVar;
   CmmHeap *MyHeap = new BBStack(100000);
 
-  GcArray<MyClass> * MyVector = new (100, heap) GcArray<MyClass> ;
+  GcArray<MyClass> * MyVector = new (100, Cmm::heap) GcArray<MyClass> ;
 
   //  Instead of 
   //  .... MyVar = new MyClass[100];
@@ -24,7 +25,7 @@ main()
 
   MyVar[2].test();
 
-  heap->collect();
+  Cmm::heap->collect();
 
   MyVar[2].test();
 }

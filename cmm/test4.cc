@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "cmm.H"
+#include "cmm.h"
 
 /* Define two types of cells, big_cell and little_cell.  Sizes are chosen so
    that one big_cell and one little_cell can be allocated out of the same
@@ -24,7 +24,7 @@ struct  big_cell : GcObject {
 
 void big_cell::traverse()
 {
-  CmmHeap *heap = CmmHeap::heap;
+  CmmHeap *heap = Cmm::heap;
   heap->scavenge((GcObject **)&car);
   heap->scavenge((GcObject **)&cdr);
 }
@@ -42,12 +42,12 @@ struct  little_cell : GcObject {
   int  value;
   int  pad[47];
   little_cell();
-  void traverse(CmmHeap *region);
+  void traverse();
 };
 
 void little_cell::traverse()
 {
-  CmmHeap *heap = CmmHeap::heap;
+  CmmHeap *heap = Cmm::heap;
   heap->scavenge((GcObject **)&car);
   heap->scavenge((GcObject **)&cdr);
 }
@@ -59,7 +59,7 @@ little_cell::little_cell()
 
 typedef  little_cell* lp;
 
-gcheap  dummy(1048576, 2147483647, 1048576, 50, 45, GCMEM+GCSTATS);
+Cmm  dummy(1048576, 2147483647, 1048576, 50, 45, CMM_MEM+CMM_STATS);
 
 main()
 {

@@ -1,7 +1,7 @@
 
 _______________________________________________________________________________
 
-  Copyright (c) 1993 Giuseppe Attardi and Tito Flagella
+  Copyright (c) 1993, 1994, 1995 Giuseppe Attardi and Tito Flagella
 _______________________________________________________________________________
 
 Summary:
@@ -14,41 +14,27 @@ Summary:
 
 In detail:
 
-  1. Permission to use, copy, modify this software and its documentation
-     for any purpose is hereby granted without fee, provided that
-     - the above copyright notice appears in all copies,
-     - both that copyright notice and this permission notice appears in
-       supporting documentation, and that
-     - you cause modified files to carry prominent notices stating that
-       you changed the files and the date of any change.
+  Permission to use, copy, and modify this software and its documentation is
+  hereby granted only under the following terms and conditions.  Both the
+  above copyright notice and this permission notice must appear in all copies
+  of the software, derivative works or modified versions, and any portions
+  thereof, and both notices must appear in supporting documentation.
 
-  2. Please notify us if you are going to sell this software or its
-     documentation for profit.
-
-  3. WE DISCLAIM ALL WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL
-     IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL
-     WE BE LIABLE FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR
-     ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
-     WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
-     ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
-     SOFTWARE.
-
-
-Additionally:
-
-  CMM is free software; you can redistribute it and/or modify it
-  under the terms of the GNU Library General Public License as published
-  by the Free Software Foundation; either version 2 of the License, or
-  (at your option) any later version; see file 'Copying'.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Library General Public License for more details.
-
-  You should have received a copy of the GNU Library General Public License
-  along with this program; if not, write to the Free Software
-  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+  Users of this software agree to the terms and conditions set forth herein,
+  and agree to license at no charge to all parties under these terms and
+  conditions any derivative works or modified versions of this software.
+  
+  This software may be distributed (but not offered for sale or transferred
+  for compensation) to third parties, provided such third parties agree to
+  abide by the terms and conditions of this notice.  
+  
+  THE SOFTWARE IS PROVIDED "AS IS" AND THE COPYRIGHT HOLDERS DISCLAIM ALL
+  WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL THE COPYRIGHT HOLDERS
+  BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR
+  ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+  IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
+  OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
 Address:
@@ -62,3 +48,8 @@ Address:
 Address for reporting bugs, comments, suggestions:
 
   cmm@di.unipi.it
+
+Contributors:
+
+	Uttam M. Narsu	<narsu@styx.hks.com>
+	Pietro Iglio	<iglio@di.unipi.it>

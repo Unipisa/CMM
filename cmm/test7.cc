@@ -1,6 +1,6 @@
-#include "config.h"
-#include "cmm.H"
-#include "../../BigNum/g++/Integer.H"
+#include "../../Basic/Basic.H"
+#include "../../Arith/BigNum/Integer.H"
+#include "cmm.h"
 
 int main()
 {

@@ -10,7 +10,7 @@
 #include <stream.h>
 #include <ctype.h>
 
-#include "cmm.C"
+#include "cmm.cc"
 
 #define MB  1048576
 
@@ -25,7 +25,7 @@ struct  block : GcObject {
 
 void block::traverse()
 {
-  CmmHeap::heap->scavenge((GcObject **)&prev);
+  Cmm::heap->scavenge((GcObject **)&prev);
 }
 
 block::block(block* ptr, int x)
@@ -36,7 +36,7 @@ block::block(block* ptr, int x)
 
 void  makeheap(int initial, int final, int inc)
 {
-	gcheap  heap(initial*MB, final*MB, inc*MB, 0, 1, GCSTATS);
+	Cmm  heap(initial*MB, final*MB, inc*MB, 0, 1, CMM_STATS);
 }
 
 main(int argc, char* argv[])
@@ -49,12 +49,12 @@ main(int argc, char* argv[])
 		  (argc < 4) ? 2 : atoi(argv[3]));
 	for  (i = 0 ; expandfailed != 1 &&  i < 20; i++)  {
 	   lp = new block(lp, i);
-	   gccollect();
+	   Cmm::heap->collect();
 	}
 	lp = new block(lp, i);
-	gccollect();
+	Cmm::heap->collect();
 	lp = new block(lp, i+1);
-	gccollect();
+	Cmm::heap->collect();
 	i = 0;
 	while  (lp != NULL)  {
 	   cout << lp->number[0] << " " << lp->number[24999] << "  ";

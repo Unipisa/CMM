@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "cmm.H"
+#include "cmm.h"
 
 /* Cell type to build a list with. */
 
@@ -20,7 +20,7 @@ struct  cell : GcObject  {
 
 void cell::traverse()
 {
-  CmmHeap *heap = CmmHeap::heap;
+  CmmHeap *heap = Cmm::heap;
   heap->scavenge((GcObject **)&next);
   heap->scavenge((GcObject **)&value1);
 }
@@ -39,8 +39,8 @@ struct  cella  {
   cellptr ptr[50000];
 };
 
-gcheap  dummy(1048576, 2147483647, 1048576, 35, 30,
-	       GCHEAPROOTS+GCMEM+GCSTATS);
+Cmm  dummy(1048576, 2147483647, 1048576, 35, 30,
+	       CMM_HEAPROOTS+CMM_MEM+CMM_STATS);
 
 main()
 {

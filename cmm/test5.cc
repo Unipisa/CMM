@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "HeapStack.H"
+#include "tempheap.h"
 
 struct  cell : GcObject 
 {
@@ -19,7 +19,7 @@ typedef  cell* CP;
 
 void cell::traverse()  
 {
-  CmmHeap *heap = CmmHeap::heap;
+  CmmHeap *heap = Cmm::heap;
   heap->scavenge((GcObject **)&car);
   heap->scavenge((GcObject **)&cdr);
 }
@@ -47,7 +47,7 @@ typedef  vector* VP;
 
 void vector::traverse()
 {
-  CmmHeap *heap = CmmHeap::heap;
+  CmmHeap *heap = Cmm::heap;
   heap->scavenge((GcObject **)&car);
   heap->scavenge((GcObject **)&cdr);
 }
@@ -100,7 +100,7 @@ void  listtest1()
 	printf("%d\n", i);
       zp = new cell(NULL, lp, i);
       lp = zp;
-      CmmHeap::heap->collect();
+      Cmm::heap->collect();
       zp = lp;
       for (j = i; j >= 0 ; j--)  
 	{
@@ -127,7 +127,7 @@ void  vectortest()
 	printf("%d\n", i);
       zp = new vector(NULL, lp, i, i);
       lp = zp;
-      CmmHeap::heap->collect();
+      Cmm::heap->collect();
       zp = lp;
       for (j = i; j >= 0 ; j--)  
 	{
@@ -151,9 +151,9 @@ CP  treetest()
       zp = new cell(tp, tp, i);
       tp = zp;
     }
-  CmmHeap::heap->collect();
+  Cmm::heap->collect();
   zp = new cell(tp, tp, 6);
-  CmmHeap::heap->collect();
+  Cmm::heap->collect();
   printtree(zp);
   return(zp);
 }
@@ -193,9 +193,9 @@ CP  gp;		/* A global pointer */
 
 
 
-main(int argc, char *argv[])
+main()
 {
-  CmmHeap::heap = new BBStack(10000);
+//  Cmm::heap = new TempHeap(10000);
   /* List construction test */
   listtest1();
 
