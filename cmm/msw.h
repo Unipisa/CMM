@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------*
  *
- *  msw.h: memory manager with mark&sweep garbage collection.
+ *  msw.h:	memory manager with mark&sweep garbage collection.
  *
  *  date:	6 March 1995
  *  authors:	Pietro Iglio
@@ -74,4 +74,3 @@ extern void		mswRegisterRoot		(void *);
 #endif
 
 #endif /* ! _msw_h */
-

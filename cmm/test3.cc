@@ -1,16 +1,16 @@
-/* This program is used to test the ability of gcalloc to recover from heap
-   allocation failures.  It is run:
+/* This program is used to test the ability of DefaultHeap::alloc()
+   to recover from heap allocation failures.  It is run:
 
 	expand [<initial heap> [<max heap> [<increment>]]]
 
    where all values are optional and expressed in megabytes.
 */
 
-#include <string.h>
 #include <stream.h>
+#include <string.h>
 #include <ctype.h>
 
-#include "cmm.cc"
+#include "cmm.h"
 
 #define MB  1048576
 
@@ -23,7 +23,8 @@ struct  block : CmmObject {
   void traverse();
 };
 
-void block::traverse()
+void
+block::traverse()
 {
   Cmm::heap->scavenge((CmmObject **)&prev);
 }
@@ -34,7 +35,8 @@ block::block(block* ptr, int x)
 	for  (int i = 0 ; i < 25000 ; i++)  number[i] = x;
 }
 
-void  makeheap(int initial, int final, int inc)
+void
+makeheap(int initial, int final, int inc)
 {
 	Cmm  heap(initial*MB, final*MB, inc*MB, 0, 1, CMM_STATS);
 }
@@ -42,12 +44,14 @@ void  makeheap(int initial, int final, int inc)
 main(int argc, char* argv[])
 {
 	block  *lp = NULL;
-	int  i;
+	int  i, max;
 
+	max = (argc < 3) ? 50 : atoi(argv[2]);
 	makeheap((argc == 1) ? 1 : atoi(argv[1]),
-		  (argc < 3) ? 1000 : atoi(argv[2]),
+		  max,
 		  (argc < 4) ? 2 : atoi(argv[3]));
-	for  (i = 0 ; expandfailed != 1 &&  i < 20; i++)  {
+	cout << "Will try to allocate up to " << max << "MB of heap\n";
+	for  (i = 0 ; i < 20; i++)  {
 	   lp = new block(lp, i);
 	   Cmm::heap->collect();
 	}

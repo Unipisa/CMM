@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "msw.h"
 
 enum _TreeTag {
@@ -209,7 +210,8 @@ treeNewDouble(double d)
 	tree = (Tree) mswAlloc(sizeof(DoubleStruct));
 
 	tree->tag = TAG_Double;
-	tree->doubleVal.val = d;
+/*	tree->doubleVal.val = d;  */
+	tree->intVal.val = 1;
 	return tree;
 }
 
@@ -257,7 +259,7 @@ foo()
 {
 	List l = NULL;
 	List l1;
-	int i;
+        int i;
 
 	for (i = 0; i < maxListSize; i++) {
 		push(dummyList(i), l);
@@ -268,10 +270,8 @@ foo()
 
 	mswCheckHeap(1);
 
-	while (l1) {
-		i += 1;
+	while (l1)
 		l1 = cdr(l1);
-	}
 
 	l1 = listReverse(l);
 	l1 = listNReverse(l1);

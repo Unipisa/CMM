@@ -36,7 +36,6 @@
  *
  *---------------------------------------------------------------------------*/
 
-#include "machine.h"
 #include "tempheap.h"
 
 /*---------------------------------------------------------------------------*
@@ -151,18 +150,19 @@ RootSet::RootSet()
   current = 0;
   entrypNum = 10;
   currentp = 0;
-  
+
   // Default to not-conservative
   isConservative = false;
-  
+
   entry = new CmmObject*[entryNum];
   entryp = new CmmObject**[entrypNum];
-  
-  for (int i = 0; i < entryNum; i++)
+
+  int i;
+  for (i = 0; i < entryNum; i++)
     entry[i] = NULL;
   for (i = 0; i < entrypNum; i++)
     entryp[i] = NULL;
-  
+
 }
 
 void 
@@ -177,7 +177,7 @@ RootSet::set(CmmObject *obj)
 	return;
       }
   CmmObject **tmp = new CmmObject*[entryNum + entryInc];
-  
+
   for (i = 0; i < entryNum; i++)
     tmp[i] = entry[i];
   delete entry;
@@ -225,7 +225,7 @@ RootSet::setp(CmmObject **obj)
 	return;
       }
   CmmObject ***tmp = new CmmObject**[entrypNum + entryInc];
-  
+
   for (i = 0; i < entrypNum; i++)
     tmp[i] = entryp[i];
   delete entryp;
@@ -295,7 +295,8 @@ TempHeap::expand()
       toCollect = true;
       
       Container **nc = new Container*[chunkNum + chunkInc];
-      for (int i = 0;  i <= current;  i++)
+      int i;
+      for (i = 0;  i <= current;  i++)
 	nc[i] = chunk[i];
       delete chunk;
       chunkNum += chunkInc;
@@ -311,7 +312,7 @@ TempHeap::alloc(unsigned long bytes)
 { 
   if ((chunk[current]->room()) < bytesToWords(bytes) * bytesPerWord)
     expand();			// expand() modifies current.
-  
+
   return chunk[current]->alloc(bytes);
 }
 
@@ -329,10 +330,10 @@ TempHeap::scavenge(CmmObject **ptr)
   GCP pp = (GCP)*ptr;
   if (OUTSIDE_HEAP(GCPtoPage(pp)))
     return;
-  
+
   CmmObject *oldPtr = basePointer(pp);
   int offset = (int)pp - (int)oldPtr;
-  
+
   if (!inside(oldPtr))
     {
       /* If an external object may point into this heap, we should visit.
@@ -366,28 +367,29 @@ TempHeap::collect()
 {
   CmmObject *objPtr;
   int i;
-  
+
   if (!toCollect && current < chunkNum * 0.8)
     return;
-  
-  WHEN_VERBOSE(fprintf(stderr, "TempHeap Collector: C[0-%d] -> ", current));
-  
+
+  WHEN_VERBOSE(CMM_STATS,
+	       fprintf(stderr, "TempHeap Collector: C[0-%d] -> ", current));
+
 #if !HEADER_SIZE || defined(MARKING)
   /* Clear the liveMap bitmap */
   for (i = 0; i <= current; i++)
     chunk[i]->resetliveMap();
 #endif
-  
+
   // Expand is used to start with a new Container which will
   // be the first one of the ToSpace.
   // A simple increment of current is not enough when the stack needs
   // to be expanded.
-  
+
   expand();
   int toSpaceIndex = current;
-  
+
   roots.scan(this);
-  
+
   for (i = toSpaceIndex; i <= current; i++)
     {
       Container *container = chunk[i];
@@ -404,8 +406,9 @@ TempHeap::collect()
 	  objPtr = objPtr->next();
 	}
     }
-  WHEN_VERBOSE(fprintf(stderr, "C[%d-%d]\n", toSpaceIndex, current));
-  
+  WHEN_VERBOSE(CMM_STATS,
+	       fprintf(stderr, "C[%d-%d]\n", toSpaceIndex, current));
+
   for (i = 0 ; i < toSpaceIndex; i++)
     chunk[i]->reset();
 
@@ -425,12 +428,13 @@ TempHeap::reset()
 {
   // It resets the objectMap. In fact collect is
   // expected to coexist with reset. Use weakReset elsewhere.
-  
-  WHEN_VERBOSE(fprintf(stderr, "Resetting TempHeap: C[0-%d]\n", current));
-  
+
+  WHEN_VERBOSE(CMM_STATS,
+	       fprintf(stderr, "Resetting TempHeap: C[0-%d]\n", current));
+
   for (int i = 0; i <= current; i++)
     chunk[i]->reset();
-  
+
   current = 0;
 }
 
@@ -440,11 +444,12 @@ TempHeap::weakReset()
   // It doesn't reset the objectMap. In fact collect is not
   // expected to coexist with weakReset. And objectMap is only used
   // by collect.
-  
-  WHEN_VERBOSE(fprintf(stderr, "Weak Resetting TempHeap: C[0-%d]\n", current));
-  
+
+  WHEN_VERBOSE(CMM_STATS,
+	       fprintf(stderr, "Weak Resetting TempHeap: C[0-%d]\n", current));
+
   for (int i = 0; i <= current; i++)
     chunk[i]->weakReset();
-  
+
   current = 0;
 }

@@ -90,15 +90,12 @@
  * SOFTWARE.
  */
 
-#include "machine.h"
 #include "cmm.h"
 #include <setjmp.h>
 
 /* Version tag */
 
-char*  Cmm::version = "CMM 1.5";
-
-extern "C"  void* sbrk(int);
+char*  Cmm::version = "CMM 1.6";
 
 /*---------------------------------------------------------------------------*
  *
@@ -140,7 +137,6 @@ CmmHeap      **pageHeap;	/* Heap to which each page belongs	*/
 
 int          tablePages;	/* # of pages used by tables	*/
 int          firstTablePage;	/* index of first page used by table	*/
-
 
 /*---------------------------------------------------------------------------*
  *
@@ -192,7 +188,7 @@ int          firstTablePage;	/* index of first page used by table	*/
  *
  *---------------------------------------------------------------------------*/
 
-int Cmm::verbose = 1;		/* controls amount of printout */
+int Cmm::verbose = 0;		/* controls amount of printout */
 
 /*
  * An instance of the type Cmm is created to configure the size of the
@@ -217,8 +213,8 @@ bool Cmm::created    = false;	       /* boolean indicating heap created */
 
 
 Cmm::Cmm(int newMinHeap, int newMaxHeap, int newIncHeap,
-	 int newGenerational, int newIncPercent, int newFlags,
-	 int newGcThreshold)
+	 int newGenerational, int newIncPercent, int newGcThreshold,
+	 int newFlags, int newVerbose)
 {
   if  (!created
        &&  newMinHeap > 0
@@ -252,8 +248,9 @@ Cmm::Cmm(int newMinHeap, int newMaxHeap, int newIncHeap,
 	generational = CMM_GENERATIONAL;
       if  (incPercent < 0 || incPercent > 50) incPercent = CMM_INCPERCENT;
     }
-  flags = flags | newFlags;
   gcThreshold = newGcThreshold;
+  flags |= newFlags;
+  verbose |= newVerbose;
 }
 
 /*
@@ -486,9 +483,10 @@ class GcFreeObject: public CmmObject {
 static GcFreeObject *aGcFreeObject;
 
 # ifdef DOUBLE_ALIGN_OPTIMIZE
-/*
+/*---------------------------------------------------------------------------*
  * An object of this class is used for padding.
- */
+ *---------------------------------------------------------------------------*/
+
 class GcPadObject: public CmmObject {
   void traverse() {}
   int words() { return 1; }
@@ -500,15 +498,14 @@ static GcPadObject *aGcPadObject;
 
 DefaultHeap *Cmm::theDefaultHeap;
 UncollectedHeap *Cmm::theUncollectedHeap;
-CmmHeap *Cmm::heap;
-CmmHeap *Cmm::theMSHeap = (CmmHeap*) 100;  // 100 to get it working with C
+CmmHeap		*Cmm::heap;
+CmmHeap		*Cmm::theMSHeap = (CmmHeap*) 100; // 100 to get it working with C
 
 // used during initialization of objects:
-static CmmObject *aCmmObject;
-static CmmVarObject *aCmmVarObject;
+static CmmObject	*aCmmObject;
+static CmmVarObject	*aCmmVarObject;
 
-static unsigned long stackBottom; // The base of the stack
-GCP 	 	     globalHeapStart; // start of global heap
+static GCP	globalHeapStart; // start of global heap
 
 void
 CmmInitEarly()
@@ -516,17 +513,7 @@ CmmInitEarly()
   int i;
   if (stackBottom == 0)
     {
-#   ifdef STACKBOTTOM
-	stackBottom = STACKBOTTOM;
-#   else
-#     define STACKBOTTOM_ALIGNMENT_M1 0xffffff
-#     ifdef STACK_GROWS_DOWNWARD
-      stackBottom = ((unsigned)&i + STACKBOTTOM_ALIGNMENT_M1)
-	& ~STACKBOTTOM_ALIGNMENT_M1;
-#     else
-      stackBottom = (unsigned)&i & ~STACKBOTTOM_ALIGNMENT_M1;
-#     endif
-#   endif
+      CmmSetStackBottom((Word)&i);
       /* Determine start of system heap				*/
       globalHeapStart = (GCP)sbrk(0);
     }
@@ -553,19 +540,20 @@ CmmInit()
 {
   char  *heap;
   int  i;
-  
+
   /* Log actual heap parameters if from environment or logging */
   if ((environmentValue("CMM_MINHEAP", Cmm::minHeap)
-	| environmentValue("CMM_MAXHEAP", Cmm::maxHeap) 
-	| environmentValue("CMM_INCHEAP", Cmm::incHeap) 
-	| environmentValue("CMM_GCTHRESHOLD", Cmm::gcThreshold) 
-	| environmentValue("CMM_GENERATIONAL", Cmm::generational) 
-	| environmentValue("CMM_INCPERCENT", Cmm::incPercent) 
-	| environmentValue("CMM_FLAGS", Cmm::flags))
-        || Cmm::flags & CMM_STATS)
-    fprintf(stderr, "***** CMM  Cmm(%d, %d, %d, %d, %d, %d, %d)\n",
-	    Cmm::minHeap, Cmm::maxHeap, Cmm::gcThreshold, Cmm::incHeap,
-	    Cmm::generational, Cmm::incPercent, Cmm::flags);
+       | environmentValue("CMM_MAXHEAP", Cmm::maxHeap) 
+       | environmentValue("CMM_INCHEAP", Cmm::incHeap) 
+       | environmentValue("CMM_GENERATIONAL", Cmm::generational) 
+       | environmentValue("CMM_INCPERCENT", Cmm::incPercent) 
+       | environmentValue("CMM_GCTHRESHOLD", Cmm::gcThreshold) 
+       | environmentValue("CMM_FLAGS", Cmm::flags)
+       | environmentValue("CMM_VERBOSE", Cmm::verbose))
+      || Cmm::verbose)
+    fprintf(stderr, "***** Cmm(%d, %d, %d, %d, %d, %d, %d, %d)\n",
+	    Cmm::minHeap, Cmm::maxHeap, Cmm::incHeap, Cmm::generational,
+	    Cmm::incPercent, Cmm::gcThreshold, Cmm::flags, Cmm::verbose);
 
   /* Allocate heap and side tables.  Exit on allocation failure. */
   heapSpanPages = totalPages = (Cmm::minHeap + bytesPerPage - 1)/bytesPerPage;
@@ -579,7 +567,8 @@ CmmInit()
   /* Allocate one block for both the heap and the tables.
    * The tables will be recycled into pages at the next collection.
    */
-  heap = ::new char[(totalPages + tablePages) * bytesPerPage + bytesPerPage - 1];
+  heap = ::new char[(totalPages + tablePages) * bytesPerPage
+		    + bytesPerPage - 1];
   if (heap == NULL)
     {
       fprintf(stderr, 
@@ -691,21 +680,21 @@ static int
 expandHeap(int increment)
 {
   int  inc_totalPages = increment/bytesPerPage;
-  int  new_firstHeapPage = firstHeapPage;
+  int  new_firstHeapPage;
   int  inc_firstHeapPage;
-  int  new_lastHeapPage = lastHeapPage;
+  int  new_lastHeapPage;
   int  inc_lastHeapPage;
   int  new_totalPages;
-  int  *new_pageLink = NULL;
-  unsigned long  *new_objectMap = NULL;
+  int  *new_pageLink;
+  unsigned long  *new_objectMap;
 # if !HEADER_SIZE || defined(MARKING)
-  unsigned long  *new_liveMap = NULL;
+  unsigned long  *new_liveMap;
 # endif
   int  i;
 
-  short *new_pageSpace = NULL;
-  short *new_pageGroup = NULL;
-  CmmHeap **new_pageHeap = NULL;
+  short *new_pageSpace;
+  short *new_pageGroup;
+  CmmHeap **new_pageHeap;
 
   char  *new_tables;
   int   new_tablePages;
@@ -744,7 +733,7 @@ expandHeap(int increment)
     fail: set_new_handler(saveNewHandler);
       if (inc_heap) delete inc_heap;
       expandFailed = true;
-      WHEN_FLAGS (CMM_STATS,
+      WHEN_VERBOSE (CMM_STATS,
 		  fprintf(stderr, "\n***** CMM  Heap expansion failed\n"));
       return  0;
     }
@@ -824,9 +813,7 @@ expandHeap(int increment)
   firstTablePage = GCPtoPage(new_tables);
   firstFreePage = inc_firstHeapPage;
   
-  WHEN_VERBOSE(printf("Heap pages: %d\n", totalPages));
-  
-  WHEN_FLAGS (CMM_STATS,
+  WHEN_VERBOSE (CMM_STATS,
 	      fprintf(stderr,
 		      "\n***** CMM  Heap expanded to %d bytes\n",
 		      totalPages * bytesPerPage));
@@ -917,7 +904,7 @@ promotePage(GCP cp)
 	      page += pages; 
 	      pages = pageGroup[page]; 
 	    }
-	  WHEN_FLAGS (CMM_DEBUGLOG,
+	  WHEN_VERBOSE (CMM_DEBUGLOG,
 		      fprintf(stderr, "promoted 0x%x\n", pageToGCP(page)));
 	  queue(page);
 	  Cmm::theDefaultHeap->usedPages += pages; // in nextSpace
@@ -965,12 +952,14 @@ basePointer(GCP fp)
   while (true);
 }
 
-#ifdef TRACE
+/*---------------------------------------------------------------------------*
+ * Forward declarations:
+ *---------------------------------------------------------------------------*/
+
 static void verifyObject(GCP, int);
 static void verifyHeader(GCP);
 static void newlineIfLogging();
 static void logRoot(long*);
-#endif
 
 
 /*---------------------------------------------------------------------------*
@@ -1056,7 +1045,7 @@ CmmMove(GCP cp)
       /* Discard any partial page and allocate a new one */
       // We must ensure that this does not invoke expandHeap()
       Cmm::theDefaultHeap->reservePages(1);
-      WHEN_FLAGS (CMM_DEBUGLOG, fprintf(stderr, "queued   0x%x\n", firstFreeWord));
+      WHEN_VERBOSE (CMM_DEBUGLOG, fprintf(stderr, "queued   0x%x\n", firstFreeWord));
       queue(GCPtoPage(firstFreeWord));
       Cmm::theDefaultHeap->stablePages += 1;
     }
@@ -1150,7 +1139,7 @@ DefaultHeap::collect()
     }
   
   /* Log entry to the collector */
-  WHEN_FLAGS (CMM_STATS, {
+  WHEN_VERBOSE (CMM_STATS, {
     fprintf(stderr, "***** CMM  Collecting - %d%% allocated  ->  ",
 	    HEAPPERCENT(usedPages));
     newlineIfLogging();
@@ -1184,58 +1173,43 @@ DefaultHeap::collect()
 # endif
   /* Examine stack, registers, static area and possibly the non-garbage
      collected heap for possible pointers */
-  WHEN_FLAGS (CMM_ROOTLOG, fprintf(stderr, "stack roots:\n"));
+  WHEN_VERBOSE (CMM_ROOTLOG, fprintf(stderr, "stack roots:\n"));
   {
     jmp_buf regs;
     GCP fp;			/* Pointer for checking the stack */
-#   ifdef STACK_GROWS_DOWNWARD
-    register GCP lim = (GCP)regs;
-#   else
-    register GCP lim = (GCP)regs + sizeof(regs);
-#   endif
-    extern int end;
-    
-    /* ensure flushing of register caches */
+    void CmmExamineStaticArea(GCP, GCP);
+
+    /* ensure flushing of register caches	*/
     if (_setjmp(regs) == 0) _longjmp(regs, 1);
     
+    /* Examine the stack:		*/
 #   ifdef STACK_GROWS_DOWNWARD
-    for (fp = lim; fp < (GCP)stackBottom; fp++)
-      {
-	WHEN_FLAGS (CMM_ROOTLOG, logRoot(fp));
-	promotePage((GCP)*fp);
-      }
+    for (fp = (GCP)regs; fp < (GCP)stackBottom; fp++)
 #   else
-    for (fp = lim; fp > (GCP)stackBottom; fp--)
-      {
-	WHEN_FLAGS (CMM_ROOTLOG, logRoot(fp));
-	promotePage((GCP)*fp);
-      }
+    for (fp = (GCP)regs + sizeof(regs); fp > (GCP)stackBottom; fp--)
 #   endif
-    
-    WHEN_FLAGS (CMM_ROOTLOG,
-		fprintf(stderr, "static and register roots:\n"));
-    
-    // Split this loop in two to skip location firstFreeWord and avoid
-    // promoting current page.
-    for (fp = (GCP)DATASTART ; fp < (GCP)&firstFreeWord ; fp++)
       {
-	WHEN_FLAGS (CMM_ROOTLOG, logRoot(fp));
+	WHEN_VERBOSE (CMM_ROOTLOG, logRoot(fp));
 	promotePage((GCP)*fp);
       }
-    for (fp = (GCP)&firstFreeWord + 1 ; fp < (GCP)&end ; fp++)
-      {
-	WHEN_FLAGS (CMM_ROOTLOG, logRoot(fp));
-	promotePage((GCP)*fp);
-      }
+    
+    /* Examine the static areas:		*/
+    WHEN_VERBOSE (CMM_ROOTLOG,
+		fprintf(stderr, "Static and registered roots:\n"));
+
+    CmmExamineStaticAreas(CmmExamineStaticArea);
+
+    /* Examine registered roots:		*/
     for (int i = 0; i < rootsCount; i++)
       {
 	fp = roots[i].addr;
 	for (int j = roots[i].bytes; j > 0; j = j - bytesPerWord)
 	  promotePage((GCP)*fp++);
       }
+    /* Examine the uncollected heap:		*/
     if (Cmm::flags & CMM_HEAPROOTS)
       {
-	WHEN_FLAGS (CMM_HEAPLOG,
+	WHEN_VERBOSE (CMM_HEAPLOG,
 		    fprintf(stderr, "Uncollected heap roots:\n"));
 	GCP globalHeapEnd = (GCP)sbrk(0);
 	fp = globalHeapStart;
@@ -1243,7 +1217,7 @@ DefaultHeap::collect()
 	  {
 	    if (!inside((GCP)fp)) 
 	      {
-		WHEN_FLAGS (CMM_HEAPLOG, logRoot(fp));
+		WHEN_VERBOSE (CMM_HEAPLOG, logRoot(fp));
 		if (Cmm::flags & CMM_HEAPROOTS)
 		  promotePage((GCP)*fp);
 		fp++;
@@ -1253,7 +1227,7 @@ DefaultHeap::collect()
 	  }
       }
   }
-  WHEN_FLAGS (CMM_STATS, {
+  WHEN_VERBOSE (CMM_STATS, {
     fprintf(stderr, "%d%% locked  ", HEAPPERCENT(usedPages));
     newlineIfLogging();
   });
@@ -1269,7 +1243,7 @@ DefaultHeap::collect()
 				// this page will have to be traversed
 #     endif
       cp = pageToGCP(page);
-      WHEN_FLAGS (CMM_DEBUGLOG, fprintf(stderr, "sweeping 0x%x\n", cp));
+      WHEN_VERBOSE (CMM_DEBUGLOG, fprintf(stderr, "sweeping 0x%x\n", cp));
       GCP nextPage = pageToGCP(page + 1);
       bool inCurrentPage = (page == GCPtoPage(firstFreeWord));
       nextcp = inCurrentPage ? firstFreeWord : nextPage;
@@ -1303,7 +1277,7 @@ DefaultHeap::collect()
   /* Finished, all retained pages are now part of the stable set */
   currentSpace = currentSpace + 2;
   nextSpace = currentSpace;
-  WHEN_FLAGS (CMM_STATS,
+  WHEN_VERBOSE (CMM_STATS,
 	      fprintf(stderr, "%d%% stable.\n", HEAPPERCENT(stablePages)));
   
   /* Check for total collection and heap expansion.  */
@@ -1332,6 +1306,16 @@ DefaultHeap::collect()
     }
 }
 
+void
+CmmExamineStaticArea(GCP base, GCP limit)
+{
+  register GCP fp;
+  for (fp = base ; fp < limit ; fp++)
+    {
+      WHEN_VERBOSE (CMM_ROOTLOG, logRoot(fp));
+      promotePage((GCP)*fp);
+    }
+}
 
 /*---------------------------------------------------------------------------*
  * -- nextPage
@@ -1890,7 +1874,7 @@ logRoot(long* fp)
 static void
 newlineIfLogging()
 {
-  WHEN_FLAGS ((CMM_DEBUGLOG | CMM_ROOTLOG | CMM_HEAPLOG),
+  WHEN_VERBOSE ((CMM_DEBUGLOG | CMM_ROOTLOG | CMM_HEAPLOG),
 	      fprintf(stderr, "\n"));
 }
 

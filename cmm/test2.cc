@@ -18,7 +18,8 @@ struct  cell : CmmObject  {
   void traverse();
 };
 
-void cell::traverse()
+void
+cell::traverse()
 {
   CmmHeap *heap = Cmm::heap;
   heap->scavenge((CmmObject **)&next);
@@ -39,8 +40,8 @@ struct  cella  {
   cellptr ptr[50000];
 };
 
-Cmm  dummy(1048576, 2147483647, 1048576, 35, 30,
-	       CMM_HEAPROOTS+CMM_STATS);
+Cmm  dummy(1048576, 2147483647, 1048576, 35, 30, CMM_HEAPROOTS+CMM_STATS,
+	   0, 0);
 
 main()
 {

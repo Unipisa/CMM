@@ -3,12 +3,12 @@ TOP = ../../..
 
 #include "../../../Makefile.include"
 
-EXPORTED_INCS = cmm.h tempheap.h msw.h
+EXPORTED_INCS = cmm.h tempheap.h msw.h machine.h
 EXPORTED_LIBS = libCmm.a
 
-HFILES = machine.h cmm.h tempheap.h msw.h
+HFILES = machine.h cmm.h
 
-OBJS = 	cmm.o tempheap.o msw.o
+OBJS = 	cmm.o tempheap.o msw.o memory.o
 
 TESTS = test2 test3 test4 test5 test6 testp2 testp3 testp5
 
@@ -31,14 +31,13 @@ libCmm.a: $(OBJS)
 	ar ru libCmm.a $(OBJS)
 	$(RANLIB) libCmm.a
 
-tempheap.o: tempheap.cc $(HFILES)
-	$(CXX) $(LCXXFLAGS) $(CXXFLAGS) -c tempheap.cc
+cmm.o: cmm.cc $(HFILES)
 
-cmm.o: cmm.cc cmm.h machine.h
-	$(CXX) $(LCXXFLAGS) $(CXXFLAGS) -c cmm.cc
+memory.o: memory.c $(HFILES)
 
-msw.o: msw.cc cmm.h machine.h msw.h
-	$(CXX) $(LCXXFLAGS) $(CXXFLAGS) -c msw.cc
+tempheap.o: tempheap.cc tempheap.h $(HFILES)
+
+msw.o: msw.cc msw.h $(HFILES)
 
 stamp:
 	sed -e s:'"CMM .*"':\\\"CMM `date +%D`\\\": cmm.cc > tmp.cc
@@ -80,7 +79,7 @@ demo2:	demo2.cc libCmm.a
 tar:
 	mv Makefile.dist makefile
 	(cd ..; \
-	tar cf cmm-1.5.tar cmm/{Copy*,README*,*.h,*.c,*.cc,makefile,doc})
+	tar cf cmm.tar cmm/{Copy*,README,*.h,*.c,*.cc,makefile,doc})
 	mv makefile Makefile.dist
 
 .Makefile:

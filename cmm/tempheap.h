@@ -145,6 +145,7 @@ public:
 
   TempHeap(int bytes = 100000) {
 
+    current = 0;
     toCollect = false;
     chunkInc = 4;
       
@@ -164,7 +165,7 @@ private:
   int chunkInc;
   int chunkNum, chunkSize;
   
-  int current;			// = 0;
+  int current;
   Container **chunk;
   
   CmmObject *copy(CmmObject *);

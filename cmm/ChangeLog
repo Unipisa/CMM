@@ -1,3 +1,41 @@
+Thu Jun  6 11:07:03 1996  Giuseppe Attardi  <attardi@omega>
+
+	* msw.cc: split mswDEBUG into mswDEBUG and mswVERBOSE.
+	This one is used to print out info on amount collected
+
+Fri Apr 19 19:01:06 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h: split <flags> into <flags> and <verbose> so that
+	they can be controlled independently
+
+Thu Feb 29 18:32:42 1996  Giuseppe Attardi  <attardi@omega>
+
+	* cmm.h: restructured include files, eliminated memory.h
+
+Fri Feb 16 11:24:37 1996  Giuseppe Attardi  <attardi@omega>
+
+	* test6.cc: it now compiles
+
+	* cmm.cc (collect): procedure CmmExamineStaticAreas takes as argument
+	function to scan the areas.
+
+	* memory.c: eliminated memGetSegments().
+
+Thu Feb 15 18:22:04 1996  Giuseppe Attardi  <attardi@omega>
+
+	* memory.c: added memory.h containg exported definitions,
+	including memSetStackBottom(), used to set stackBottom as
+	early as possible in main.
+
+Mon Feb 12 23:48:00 1996  Pietro Iglio <iglio@di.unipi.it>
+
+	* Added memGetSegments() in memory.c.
+	* CMM port for Borland C++ 4.5 and Win95.
+
+Mon Jan 22 11:37:24 1996  Giuseppe Attardi  <attardi@omega>
+
+	* memory.c: added to handle memory areas in Windows95 and NT
+
 Thu Nov  2 16:11:11 1995  Pietro Iglio  <iglio@attardi.di.unipi.it>
 
 	* Added CmmObject::operator new[] and CmmObject::operator delete[].

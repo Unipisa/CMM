@@ -201,17 +201,18 @@
    amount allocated following the total collection is greater than
    <expand threshold> percent, then an attempt is made to expand the heap.
 
-	Cmm  <CC-identifier>(<initial heap size>,
+	Cmm  <identifier>(<initial heap size>,
 			         <maximum heap size>,
 			         <expand size>,
 			         <generational>,
 			         <expand threshold>,
+				 <gcthreshold>,
 			         <flags>,
-				 <gcthreshold>)
+				 <verbose>)
 
    The arguments are defined as follows:
 
-	<CC-identifier>		 a legal C++ identifier.
+	<identifier>		 a legal C++ identifier.
 	<initial heap size>	 initial size of the heap in bytes.
 				 DEFAULT: 131072.
 	<maximum heap size>	 maximum heap size in bytes.
@@ -225,22 +226,23 @@
 	<expand threshold>       number between 0 and 50 that is the percent
 				 allocated after a total collection that will
 				 force heap expansion.  DEFAULT: 25.
-	<flags>			 controls logging on stderr, error checking,
-				 and root finding:
+	<gcthreshold>		 Heap size beyond which MSW performs GC.
+				 DEFAULT: 6000000
+	<flags>			 controls root finding and error checking:
+				   & CMM_HEAPROOTS = treat uncollected heap as
+				   		   roots
+				   & CMM_TSTOBJ = perform object consistency
+					        tests
+				 DEFAULT: 0.
+	<verbose>		 controls logging on stderr:
 				   & CMM_STATS =  log collection statistics
 				   & CMM_ROOTLOG = log roots found in the stack,
 						 registers, and static area
-				   & CMM_HEAPROOTS = treat uncollected heap as
-				   		   roots
 				   & CMM_HEAPLOG = log possible roots in
 						 uncollected heap
-				   & CMM_TSTOBJ = perform object consistency
-					        tests
 			 	   & CMM_DEBUGLOG = log events internal to the
 						  garbage collector
 				 DEFAULT: 0.
-	<gcthreshold>		Heap size before MSW starts GC.
-				DEFAULT: 6000000
 
    When multiple Cmm declarations occur, the one that specifies the largest
    <maximum heap size> value will control all factors except flags which is
@@ -256,7 +258,7 @@
 	CMM_GENERATIONAL <generational>
 	CMM_INCPERCENT	 <expand threshold>
 	CMM_FLAGS	 <flags>
-	CMM_GCTHRESHOLD  <generational>
+	CMM_GCTHRESHOLD  <gcthreshold>
 
    If any of these variables are supplied, then the actual values used to
    configure the garbage collector are logged on stderr.
@@ -267,39 +269,42 @@
 #define _CMM_H
 
 #ifndef bool
-#define bool int
-#define false 0
-#define true 1
+typedef int	bool;
+#define false	0
+#define true	1
 #endif
 
-#ifdef  __cplusplus
-extern "C" {
-#endif
-#include <stdio.h>	/* Streams are not used as they might not be
-			   initialized when needed. */
+#include <stdio.h>		/* Streams are not used as they might not be
+				   initialized when needed. */
 #include <stdlib.h>
 #include <stddef.h>
+#ifndef NDEBUG
+# define NDEBUG			/* disable assert() */
+#endif
 #include <assert.h>
 #include <memory.h>
-#ifdef  __cplusplus
-}
-#endif
 #include <new.h>
-#undef NDEBUG
-#define NDEBUG
+
+#include "machine.h"
+#include "msw.h"
 
 /*---------------------------------------------------------------------------*
  *
- * -- Verbose
+ * -- Enable CMM features or verbosity
  *
  *---------------------------------------------------------------------------*/
 
 #ifdef CMM_VERBOSE
-  #define WHEN_VERBOSE(stat)	if (Cmm::verbose) stat
+  #define WHEN_VERBOSE(flag, code)	if (Cmm::verbose & flag) code
 #else
-  #define WHEN_VERBOSE(stat)	
+  #define WHEN_VERBOSE(flag, code)
 #endif
 
+#ifdef CMM_FEATURES
+  #define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) code
+#else
+  #define WHEN_FLAGS(flag, code)
+#endif
 
 /*---------------------------------------------------------------------------*
  *
@@ -311,12 +316,6 @@ class CmmHeap;
 class DefaultHeap;
 class UncollectedHeap;
 class CmmObject;
-
-#define GcObject CmmObject	/* back compatibility */
-#define GcVarObject CmmVarObject /* back compatibility */
-#define GcArray CmmArray	/* back compatibility */
-
-typedef long  *GCP;		/* Pointer to a garbage collected object */
 
 extern GCP allocatePages(int, CmmHeap *); /* Page allocator		*/
 extern void promotePage(GCP cp);
@@ -331,9 +330,12 @@ extern void promotePage(GCP cp);
 
 extern bool  isTraced(void *);
 
-/*
+/*---------------------------------------------------------------------------*
+ *
  * Support for rule (d) above. Compiler dependent.
- */
+ *
+ *---------------------------------------------------------------------------*/
+
 #ifdef __GNUG__
 #define VirtualBase(A) &(_vb$ ## A)
 #endif
@@ -342,22 +344,26 @@ extern bool  isTraced(void *);
 #define VirtualBase(A) &(P ## A)
 #endif
 
-/*
+/*---------------------------------------------------------------------------*
+ *
  * Additional roots may be registered with the garbage collector by calling
  * the procedure gcRoots with a pointer to the area and the size of the area.
- */
+ *
+ *---------------------------------------------------------------------------*/
 
 extern void  gcRoots(void *area, int bytes);
 extern void  gcUnroots(void *addr);
 
+/* Verbosity levels:							*/
 const	CMM_STATS    =   1;	/* Log garbage collector info		*/
 const	CMM_ROOTLOG  =   2;	/* Log roots found in registers, stack
 				   and static area			*/
-const	CMM_HEAPROOTS =  4;	/* Treat uncollected heap as roots	*/
-const	CMM_HEAPLOG  =   8;	/* Log possible uncollected heap roots	*/
-const	CMM_TSTOBJ   =  16;	/* Extensively test objects		*/
-const	CMM_DEBUGLOG =  32;	/* Log events internal to collector	*/
+const	CMM_HEAPLOG  =   4;	/* Log possible uncollected heap roots	*/
+const	CMM_DEBUGLOG =   8;	/* Log events internal to collector	*/
 
+/* Features:								*/
+const	CMM_HEAPROOTS =  1;	/* Treat uncollected heap as roots	*/
+const	CMM_TSTOBJ   =   2;	/* Extensively test objects		*/
 
 /*---------------------------------------------------------------------------*
  *
@@ -417,7 +423,6 @@ extern CmmHeap **pageHeap;	/* Heap to which each page belongs	*/
 extern int   tablePages;	/* # of pages used by tables		*/
 extern int   firstTablePage;	/* index of first page used by table	*/
 extern int   freePages;		/* # of pages not yet allocated		*/
-extern GCP   globalHeapStart;	/* start of global heap			*/
 
 
 #define WORD_INDEX(p)	(((unsigned)(p)) / (bitsPerWord * bytesPerWord))
@@ -493,12 +498,6 @@ extern GCP   globalHeapStart;	/* start of global heap			*/
 #define HEAPPERCENT(x) (((x)*100)/(Cmm::theDefaultHeap->reservedPages \
 			+ freePages))
 
-#ifdef TRACE
-#define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) code
-#else
-#define WHEN_FLAGS(flag, code)
-#endif
-
 /* Default heap configuration */
 
 const int  CMM_MINHEAP      = 131072; /* # of bytes of initial heap	*/
@@ -509,6 +508,16 @@ const int  CMM_GENERATIONAL = 35;	  /* % allocated to force total
 const int  CMM_GCTHRESHOLD  = 6000000; /* Heap size before MSW starts GC */
 const int  CMM_INCPERCENT   = 25;     /* % allocated to force expansion */
 const int  CMM_FLAGS        = 0;      /* option flags			*/
+
+/*---------------------------------------------------------------------------*
+ * -- Static Memory Areas
+ *---------------------------------------------------------------------------*/
+
+extern Word	stackBottom;	/* The base of the stack	*/
+extern "C" Ptr	CmmGetStackBase(void);
+extern "C" void	CmmExamineStaticAreas(void (*)(GCP, GCP));
+extern "C" void	CmmSetStackBottom(Word);
+
 
 /*---------------------------------------------------------------------------*
  *
@@ -524,8 +533,9 @@ class Cmm
       int newIncHeap,
       int newThreshold,
       int newIncPercent,
+      int newGcThreshold,
       int newFlags,
-      int newGcThreshold = CMM_GCTHRESHOLD);
+      int newVerbose);
 
   static DefaultHeap *theDefaultHeap;
   static UncollectedHeap *theUncollectedHeap;
@@ -533,7 +543,6 @@ class Cmm
   static CmmHeap *theMSHeap;
   static char*  version;
   static int verbose;
-
   static int  minHeap;		/* # of bytes of initial heap	*/
   static int  maxHeap;		/* # of bytes of the final heap */
   static int  incHeap;		/* # of bytes of each increment */
@@ -636,6 +645,45 @@ public:
   int lastReservedPage;		// last page used by this Heap
 };
 
+/*---------------------------------------------------------------------------*
+ *
+ * -- MarkAndSweep heap
+ *
+ *---------------------------------------------------------------------------*/
+
+class MarkAndSweep : public CmmHeap 
+{
+
+ public:
+
+  inline GCP 		alloc	(unsigned long size)
+  					       { return (GCP) mswAlloc(size); }
+  inline void 		reclaim	(GCP p)        { mswFree(p); }
+  inline void 		collect	()	       { mswCollect(); }
+  inline void 		collectNow()	       { mswCollectNow(); }
+  inline void*		realloc (void * p, unsigned long size)
+                              { return mswRealloc(p, size); }
+  inline void*		calloc  (unsigned long n, unsigned long size)
+  			      { return mswCalloc(n, size); }
+
+  inline void		checkHeap()		{ mswCheckHeap(1); }
+  inline void		showInfo()		{ mswShowInfo(); }
+  
+  MarkAndSweep(unsigned mode = MSW_Automatic)
+    {
+      Cmm::theMSHeap = this;
+      mswInit(mode);
+    }
+
+  void			tempHeapStart ()	{ mswTempHeapStart(); }
+  void			tempHeapEnd   ()	{ mswTempHeapEnd(); }
+  void			tempHeapFree  ()	{ mswTempHeapFree(); }
+  void			tempHeapRegisterRoot (void* ptr)
+  					{ mswRegisterRoot(ptr); }
+
+  void			scanRoots(int page);
+
+};
 
 /*---------------------------------------------------------------------------*
  *
@@ -737,11 +785,11 @@ public:
       bzero((char*) &(((CmmArray<T> *)res)->ptr[0]), s2*sizeof(T));
 
       T* array = (T*)&(((CmmArray<T> *)res)->ptr[0]);
-      // tito: array[0] should be already initialized by the 
-      // compiler. Start from i=1.
+      // tito: array[0] should be already initialized by the compiler:
+      // start from i=1.
       for (size_t i = 1; i < s2; i++)
 	{
-	  size_t pos = &(((CmmArray<T> *)res)->ptr[i]);
+	  size_t preserve = (size_t)&(((CmmArray<T> *)res)->ptr[i]);
 	  ::new (&(((CmmArray<T> *)res)->ptr[i])) T;
 	}
       return res;
@@ -761,13 +809,15 @@ public:
     {
       unsigned int count = ((size() - sizeof(CmmArray)) / sizeof(T)) + 1;
       for (int i = 0; i < count; i++)
-	if (ptr[i])
+	if (((int*)ptr)[i])
 	  ptr[i].traverse();
     }
   
 private:
   T ptr[1];
 };
+
+/*---------------------------------------------------------------------------*/
 
 inline void CmmHeap::
 visit(CmmObject *ptr)
@@ -782,50 +832,6 @@ visit(CmmObject *ptr)
   ptr->traverse();
 #endif
 }
-
-/*---------------------------------------------------------------------------*
- *
- * -- MarkAndSweep heap
- *
- *---------------------------------------------------------------------------*/
-
-extern "C" {
-#include "msw.h"
-}
-
-class MarkAndSweep : public CmmHeap 
-{
-
- public:
-
-  inline GCP 		alloc	(unsigned long size)
-  					       { return (GCP) mswAlloc(size); }
-  inline void 		reclaim	(GCP p)        { mswFree(p); }
-  inline void 		collect	()	       { mswCollect(); }
-  inline void 		collectNow()	       { mswCollectNow(); }
-  inline void*		realloc (void * p, unsigned long size)
-                              { return mswRealloc(p, size); }
-  inline void*		calloc  (unsigned long n, unsigned long size)
-  			      { return mswCalloc(n, size); }
-
-  inline void		checkHeap()		{ mswCheckHeap(1); }
-  inline void		showInfo()		{ mswShowInfo(); }
-  
-  MarkAndSweep(unsigned mode = MSW_Automatic)
-    {
-      Cmm::theMSHeap = this;
-      mswInit(mode);
-    }
-
-  void			tempHeapStart ()	{ mswTempHeapStart(); }
-  void			tempHeapEnd   ()	{ mswTempHeapEnd(); }
-  void			tempHeapFree  ()	{ mswTempHeapFree(); }
-  void			tempHeapRegisterRoot (void* ptr)
-  					{ mswRegisterRoot(ptr); }
-
-  void			scanRoots(int page);
-
-};
 
 /*---------------------------------------------------------------------------*
  *
@@ -857,5 +863,12 @@ public:
   ~_CmmInit() {};		// destroy _DummyCmmInit after loading cmm.h
 };
 
+/*---------------------------------------------------------------------------*
+ * Back compatibility
+ *---------------------------------------------------------------------------*/
+
+#define GcObject	CmmObject
+#define GcVarObject	CmmVarObject
+#define GcArray		CmmArray
+
 #endif				// _CMM_H
-/* DON'T ADD STUFF AFTER THIS #endif */
