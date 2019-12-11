@@ -1,0 +1,64 @@
+# 
+#   Copyright (C) 1993 Tito Flagella.
+#
+#   This file is part of the POSSO Customizable Memory Manager (CMM).
+#
+#   POSSO CMM is free software; permission is hereby granted to copy this
+#   garbage collector for any purpose, provided the above notices are
+#   retained on all copies.
+#
+#   This code is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+#
+#  USER GUIDE
+#  The most useful targets in this make file are:
+#  "test"  compiles and runs all tests (listed in TESTS) reporting which
+#        ones succeeded and which failed.
+#  "clean"  removes all object code from this directory.
+#  "demo1", "demo2" etc. run various demonstration programs.
+
+OBJS = 	cmm.o HeapStack.o
+TESTS = test2 test3 test4 test5 test6
+
+all: libCmm.a
+
+test : ${TESTS}
+	 @for i in ${TESTS}; do  \
+	   ( echo "Running " $$i "..."; \
+	     $$i >tests.out 2>&1 ;  \
+	   )                    \
+	done
+
+demo: demo1 demo2
+
+libCmm.a: $(OBJS)
+	ar ru libCmm.a $(OBJS)
+	ranlib libCmm.a
+
+cmm.o: cmm.C cmm.H machine.H
+	$(CXX) $(CXXFLAGS) -c cmm.C
+
+HeapStack.o: HeapStack.C cmm.H machine.H HeapStack.H
+	$(CXX) $(CXXFLAGS) -c HeapStack.C
+
+test2:	test2.C libCmm.a
+	$(CXX) $(CXXFLAGS) -o test2 test2.C libCmm.a
+test3:	test3.C libCmm.a
+	$(CXX) $(CXXFLAGS) -o test3 test3.C libCmm.a
+test4:	test4.C libCmm.a
+	$(CXX) $(CXXFLAGS) -o test4 test4.C libCmm.a 
+test5:	test5.C libCmm.a
+	$(CXX) $(CXXFLAGS) -o test5 test5.C libCmm.a 
+test6:	test6.C libCmm.a
+	$(CXX) $(CXXFLAGS) -o test6 test6.C libCmm.a 
+test7:	test7.C libCmm.a
+	$(CXX) $(CXXFLAGS) -o test7 test7.C libCmm.a 
+demo1:	demo1.C libCmm.a 
+	$(CXX) $(CXXFLAGS) -o demo1 demo1.C libCmm.a 
+demo2:	demo2.C libCmm.a 
+	$(CXX) $(CXXFLAGS) -o demo2 demo2.C libCmm.a 
+
+clean:
+	/bin/rm -rf *.o $(TESTS) libCmm.a

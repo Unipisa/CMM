@@ -1,0 +1,411 @@
+diff -c /home/omega/attardi/posso/cmm/ChangeLog /project/posso/cmm/curr/cmm/ChangeLog
+*** /home/omega/attardi/posso/cmm/ChangeLog	Fri Mar 28 20:20:58 1997
+--- /project/posso/cmm/curr/cmm/ChangeLog	Thu Mar  6 20:30:31 1997
+***************
+*** 1,32 ****
+- Fri Mar 28 19:45:24 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.cpp (collect): revised to use roots.begin() and roots.get()
+- 	to scan registered roots.
+- 	Bartlett version was buggy, since it did not check that an entry
+- 	had proper values for .addr and .bytes. They are not set to 0 on linux.
+- 
+- 	    for (int i = 0; i < rootsCount; i++)
+- 	      {
+- 	    	fp = roots[i].addr;
+- 		for (int j = roots[i].bytes; j > 0; j = j - bytesPerWord)
+- 		  promotePage((GCP)*fp++);
+- 	      }
+- 
+- 	* cmm.h (Set): revised (no longer uses member count)
+- 
+- 	* cmm.cpp (RootAreas): revised to make it similar to Set above
+- 	(added begin() and get()). It also clears the new array.
+- 
+- 
+- Mon Mar 24 21:34:38 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.h (Set): added initialization for entries and test before
+- 	delete in insert()
+- 
+- Mon Mar 10 18:12:02 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.h: added declaration for registerRootArea and unregisterRootArea
+- 
+  Thu Mar  6 20:28:35 1997  Giuseppe Attardi  <attardi@omega>
+  
+  	* cmm.cpp (expandHeap): fixed for Linux ELF
+--- 1,3 ----
+diff -c /home/omega/attardi/posso/cmm/cmm.cpp /project/posso/cmm/curr/cmm/cmm.cpp
+*** /home/omega/attardi/posso/cmm/cmm.cpp	Fri Mar 28 20:04:32 1997
+--- /project/posso/cmm/curr/cmm/cmm.cpp	Thu Mar  6 20:32:10 1997
+***************
+*** 54,60 ****
+  
+  /* Version tag */
+  
+! char*  Cmm::version = "CMM 1.8.5";
+  
+  /*---------------------------------------------------------------------------*
+   *
+--- 54,60 ----
+  
+  /* Version tag */
+  
+! char*  Cmm::version = "CMM 1.8.4";
+  
+  /*---------------------------------------------------------------------------*
+   *
+***************
+*** 286,362 ****
+   public:
+    RootAreas()
+      {
+        max = 0;
+        free = 0;
+-       entries = NULL;
+      }
+  
+!   void insert(void * addr, int bytes)
+      {
+  #     define	    setIncrement 10
+-       int i;
+  
+        if (free)
+  	{
+! 	  for (i = 0; i < max; i++)
+  	    if (entries[i].addr == NULL)
+! 	      break;
+  	}
+!       else
+  	{
+  	  RootArea  *np;
+- 	  int count = max;
+  	  max += setIncrement;
+- 	  free = setIncrement;
+  	  np = ::new RootArea[max];
+! 	  for (i = 0; i < count; i++)
+  	    np[i] = entries[i];
+! 	  // clear the rest
+! 	  for (; i < max; i++)
+! 	    np[i].addr = NULL;
+! 	  if (entries) ::delete entries;
+  	  entries = np;
+- 	  i = count;
+  	}
+!       entries[i].addr = (GCP)addr;
+!       entries[i].bytes = bytes;
+!       free--;
+      }
+  
+!   void erase(void* addr)
+      {
+        int i;
+  
+!       for (i = 0; i < max; i++)
+  	if (entries[i].addr == addr)
+  	  {
+  	    entries[i].addr = NULL;
+  	    free++;
+  	    return;
+  	  }
+      }
+  
+!   RootArea* get()
+!     {
+!       // look for a non empty entry
+!       while (iter < max)
+! 	{
+! 	  if (entries[iter].addr)
+! 	    return &entries[iter++];
+! 	  else
+! 	    iter++;
+! 	}
+!       // No more entries;
+!       return (RootArea*)NULL;
+!     }
+! 
+!   void begin() { iter = 0;}
+  
+   private:
+!   RootArea*	entries;
+!   int		max;
+!   int		free;
+!   int		iter;
+  };
+  
+  static RootAreas	roots;	// areas registered as containing roots
+--- 286,346 ----
+   public:
+    RootAreas()
+      {
++       count = 0;
+        max = 0;
+        free = 0;
+      }
+  
+!   void add(void * addr, int bytes)
+      {
+  #     define	    setIncrement 10
+  
+        if (free)
+  	{
+! 	  for (int i = 0; i < count; i++)
+  	    if (entries[i].addr == NULL)
+! 	      {
+! 		entries[i].addr = (GCP)addr;
+! 		entries[i].bytes = bytes;
+! 		free--;
+! 		return;
+! 	      }
+  	}
+!       if (count == max)
+  	{
+  	  RootArea  *np;
+  	  max += setIncrement;
+  	  np = ::new RootArea[max];
+! 	  for (int i = 0; i < count; i++)
+  	    np[i] = entries[i];
+! 	  ::delete  entries;
+  	  entries = np;
+  	}
+!       entries[count].addr = (GCP)addr;
+!       entries[count],bytes = bytes;
+!       count++;
+      }
+  
+!   void remove(void* addr)
+      {
+        int i;
+  
+!       for (i = 0; i < count; i++)
+  	if (entries[i].addr == addr)
+  	  {
+  	    entries[i].addr = NULL;
+  	    free++;
+  	    return;
+  	  }
++       assert(i < count);
+      }
+  
+!   int  count;
+!   RootArea*   entries;
+  
+   private:
+!   int  max;
+!   int  free;
+  };
+  
+  static RootAreas	roots;	// areas registered as containing roots
+***************
+*** 372,384 ****
+  void
+  registerRootArea(void * addr, int bytes)
+  {
+!   roots.insert(addr, bytes);
+  }
+  
+  void
+  unregisterRootArea(void* addr)
+  {
+!   roots.erase(addr);
+  }
+  
+  /*---------------------------------------------------------------------------*
+--- 356,368 ----
+  void
+  registerRootArea(void * addr, int bytes)
+  {
+!   roots.add(addr, bytes);
+  }
+  
+  void
+  unregisterRootArea(void* addr)
+  {
+!   roots.remove(addr);
+  }
+  
+  /*---------------------------------------------------------------------------*
+***************
+*** 1238,1248 ****
+      CmmExamineStaticAreas(CmmExamineStaticArea);
+  
+      /* Examine registered roots:		*/
+!     roots.begin();
+!     while (RootArea* ra = roots.get())
+        {
+! 	fp = ra->addr;
+! 	for (int j = ra->bytes; j > 0; j = j - bytesPerWord)
+  	  promotePage((GCP)*fp++);
+        }
+  
+--- 1222,1231 ----
+      CmmExamineStaticAreas(CmmExamineStaticArea);
+  
+      /* Examine registered roots:		*/
+!     for (int i = 0; i < roots.count; i++)
+        {
+! 	fp = roots.entries[i].addr;
+! 	for (int j = roots.entries[i].bytes; j > 0; j = j - bytesPerWord)
+  	  promotePage((GCP)*fp++);
+        }
+  
+diff -c /home/omega/attardi/posso/cmm/cmm.h /project/posso/cmm/curr/cmm/cmm.h
+*** /home/omega/attardi/posso/cmm/cmm.h	Fri Mar 28 18:25:29 1997
+--- /project/posso/cmm/curr/cmm/cmm.h	Wed Feb 26 12:09:06 1997
+***************
+*** 363,378 ****
+  #define VirtualBase(A) &(P ## A)
+  #endif
+  
+- /*---------------------------------------------------------------------------*
+-  *
+-  * Additional roots may be registered with the garbage collector by calling
+-  * the procedure gcRoots with a pointer to the area and the size of the area.
+-  *
+-  *---------------------------------------------------------------------------*/
+- 
+- extern void  registerRootArea(void *area, int bytes);
+- extern void  unregisterRootArea(void *addr);
+- 
+  /* Verbosity levels:							*/
+  const	CMM_STATS    =   1;	/* Log garbage collector info		*/
+  const	CMM_ROOTLOG  =   2;	/* Log roots found in registers, stack
+--- 363,368 ----
+***************
+*** 877,931 ****
+   public:
+    Set()
+      {
+        max = 0;
+        free = 0;
+        iter = 0;
+-       entries = NULL;
+      }
+  
+    void insert(T* entry)
+      {
+  #     define	    setIncrement 10
+-       int i;
+  
+        if (free)
+  	{
+! 	  for (i = 0; i < max; i++)
+  	    if (entries[i] == NULL)
+! 	      break;
+  	}
+!       else
+  	{
+  	  T** np;
+! 	  int count = max;
+  	  max += setIncrement;
+! 	  free = setIncrement;
+! 	  np = ::new T*[max];
+! 	  for (i = 0; i < count; i++)
+  	    np[i] = entries[i];
+  	  // clear the rest
+  	  for (; i < max; i++)
+! 	    np[i] = NULL;
+! 	  if (entries) ::delete  entries;
+! 	  entries = np;
+! 	  i = count;
+  	}
+!       entries[i] = entry;
+!       free--;
+      }
+  
+    void erase(T* entry)
+      {
+        int i;
+  
+!       for (i = 0; i < max; i++)
+  	if (entries[i] == entry)
+  	  {
+  	    entries[i] = NULL;
+  	    free++;
+  	    return;
+  	  }
+!       assert(i < count);
+      }
+  
+    T* get()
+--- 867,921 ----
+   public:
+    Set()
+      {
++       last = 0;
+        max = 0;
+        free = 0;
+        iter = 0;
+      }
+  
+    void insert(T* entry)
+      {
+  #     define	    setIncrement 10
+  
+        if (free)
+  	{
+! 	  for (int i = 0; i < last; i++)
+  	    if (entries[i] == NULL)
+! 	      {
+! 		entries[i] = entry;
+! 		free--;
+! 		return;
+! 	      }
+  	}
+!       if (last == max)
+  	{
+  	  T** np;
+! 	  int i;
+  	  max += setIncrement;
+! 	  np = new T*[max];
+! 	  for (i = 0; i < last; i++)
+  	    np[i] = entries[i];
++ 	  delete  entries;
++ 	  entries = np;
+  	  // clear the rest
+  	  for (; i < max; i++)
+! 	    entries[i] = NULL;
+  	}
+!       entries[last++] = entry;
+      }
+  
+    void erase(T* entry)
+      {
+        int i;
+  
+!       for (i = 0; i < last; i++)
+  	if (entries[i] == entry)
+  	  {
+  	    entries[i] = NULL;
+  	    free++;
+  	    return;
+  	  }
+!       assert(i < last);
+      }
+  
+    T* get()
+***************
+*** 944,953 ****
+  
+    void begin() { iter = 0;}
+  
+!  protected:
+    T**  entries;
+    
+!  private:
+    int  max;
+    int  free;
+    int  iter;
+--- 934,943 ----
+  
+    void begin() { iter = 0;}
+  
+!   int  last;
+    T**  entries;
+    
+! private:
+    int  max;
+    int  free;
+    int  iter;
+Common subdirectories: /home/omega/attardi/posso/cmm/doc and /project/posso/cmm/curr/cmm/doc

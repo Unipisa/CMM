@@ -1,0 +1,76 @@
+
+TOP = ../../..
+
+#include "../../../Makefile.include"
+
+.SUFFIXES: .o .cpp .c
+.cpp.o:
+        $(CXX) $(CXXFLAGS) $(LCFLAGS) $(INCFLAGS) -c $<
+
+EXPORTED_INCS = cmm.h tempheap.h msw.h machine.h
+EXPORTED_LIBS = libCmm.a
+
+HFILES = machine.h cmm.h
+
+OBJS = 	cmm.o tempheap.o msw.o memory.o
+
+TESTS = test1 test2 test3 test4 test5 test6 test7 test8 test9 \
+	testmsw1 testmsw2 testmsw3
+
+all: libCmm.a
+
+library:
+	@echo Making nothing.....
+	@echo "Sorry, your Posso library is not in the expected place ;}."
+
+test : ${TESTS}
+	 @for i in ${TESTS}; do  \
+	   ( echo "Running " ./$$i "..."; \
+	     ./$$i >tests.out 2>&1 ;  \
+	   )                    \
+	done
+
+libCmm.a: $(OBJS)
+	ar ru libCmm.a $(OBJS)
+	$(RANLIB) libCmm.a
+
+cmm.o: cmm.cpp $(HFILES)
+
+memory.o: memory.cpp $(HFILES)
+
+tempheap.o: tempheap.cpp tempheap.h $(HFILES)
+
+msw.o: msw.cpp msw.h $(HFILES)
+
+stamp:
+	sed -e s:'"CMM .*"':\\\"CMM `date +%D`\\\": cmm.cpp > tmp.cpp
+	mv tmp.cpp cmm.cpp
+
+
+test1:	test1.cpp libCmm.a
+	${CPP} -o test1 ${CFLAGS} test1.cpp libCmm.a 
+test2:	test2.cpp libCmm.a
+	${CPP} -o test2 ${CFLAGS} test2.cpp libCmm.a
+test3:	test3.cpp libCmm.a
+	${CPP} -o test3 ${CFLAGS} test3.cpp libCmm.a
+test4:	test4.cpp libCmm.a
+	${CPP} -o test4 ${CFLAGS} test4.cpp libCmm.a 
+test5:	test5.cpp libCmm.a
+	${CPP} -o test5 ${CFLAGS} test5.cpp libCmm.a 
+test6:	test6.cpp libCmm.a
+	${CPP} -o test6 ${CFLAGS} test6.cpp libCmm.a 
+test7:	test7.cpp libCmm.a
+	${CPP} -o test7 ${CFLAGS} test7.cpp libCmm.a 
+test8:	test8.cpp libCmm.a
+	${CPP} -o test8 ${CFLAGS} test8.cpp libCmm.a 
+test9:	test9.cpp libCmm.a
+	${CPP} -o test9 ${CFLAGS} test9.cpp libCmm.a 
+testmsw1: testmsw1.c libCmm.a
+	${CPP} -g -o testmsw1 ${CFLAGS} testmsw1.c libCmm.a
+testmsw2: testmsw2.c libCmm.a
+	${CPP} -g -o testmsw2 ${CFLAGS} testmsw2.c libCmm.a
+testmsw3: testmsw3.cpp libCmm.a
+	${CPP} ${OPTS} -o testmsw3 ${CFLAGS} testmsw3.cpp libCmm.a
+
+.Makefile:
+	set DIR=`pwd`; cd $(TOP); make SUBDIRS=$$DIR Makefiles

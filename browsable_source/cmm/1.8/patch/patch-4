@@ -1,0 +1,1475 @@
+diff -c /home/omega/attardi/posso/cmm/ChangeLog /project/posso/cmm/curr/cmm/ChangeLog
+*** /home/omega/attardi/posso/cmm/ChangeLog	Tue Feb 25 16:11:24 1997
+--- /project/posso/cmm/curr/cmm/ChangeLog	Tue Jan  7 11:02:02 1997
+***************
+*** 1,36 ****
+- Tue Feb 25 16:10:12 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.cpp (collect): fixed loop which restores scanned pages
+- 	to STABLESPACE.
+- 	Suggestion by Christian Heckler <chh@plato.uni-paderborn.de>
+- 
+- Thu Feb 20 12:49:20 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.cpp (scavenge): avoid recursive traversal for objects which
+- 	are later in the page being scanned.
+- 
+- 	* cmm.h (DefaultHeap): added member scanning.
+- 
+- Wed Feb 19 20:30:42 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.h (CmmHeap): opaque turned into protected
+- 
+- Mon Jan 20 16:44:58 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.h (UncollectedHeap): added constructor to make heap opaque
+- 
+- Mon Jan 13 12:32:57 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.h (visit): isMarked -> marked
+- 
+- Thu Jan  9 09:04:37 1997  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.cpp: eliminated useless CmmObject::new[] and CmmObject::delete[]
+- 
+- 	* test5.cpp: eliminated unused references to tempheap
+- 
+- 	* cmm.cpp (CmmObject::new[]): revised to use CmmArray
+- 
+  Tue Jan  7 10:43:54 1997  Giuseppe Attardi  <attardi@omega>
+  
+  	* msw.cpp (mswSelect): added to select M&S heap from C
+--- 1,3 ----
+diff -c /home/omega/attardi/posso/cmm/Makefile /project/posso/cmm/curr/cmm/Makefile
+*** /home/omega/attardi/posso/cmm/Makefile	Thu Feb 20 12:46:24 1997
+--- /project/posso/cmm/curr/cmm/Makefile	Thu Nov 28 13:36:19 1996
+***************
+*** 31,36 ****
+--- 31,37 ----
+  #  "test"  compiles and runs all tests (listed in TESTS) reporting which
+  #        ones succeeded and which failed.
+  #  "clean"  removes all object code from this directory.
++ #  "demo1", "demo2" etc. run various demonstration programs.
+  
+  CFLAGS	= -O2
+  CC	= g++
+***************
+*** 39,45 ****
+  
+  OBJS = 	cmm.o tempheap.o msw.o memory.o
+  
+! TESTS = test2 test3 test4 test5 test6 test7 test8 testmsw1 testmsw2 testmsw3
+  
+  all: libCmm.a
+  
+--- 40,46 ----
+  
+  OBJS = 	cmm.o tempheap.o msw.o memory.o
+  
+! TESTS = test2 test3 test4 test5 test6 test7 testmsw1 testmsw2 testmsw3
+  
+  all: libCmm.a
+  
+***************
+*** 81,88 ****
+  	$(CC) $(CFLAGS) -o test6 test6.cpp libCmm.a 
+  test7:	test7.cpp libCmm.a
+  	$(CC) $(CFLAGS) -o test7 test7.cpp libCmm.a 
+- test8:	test8.cpp libCmm.a
+- 	$(CC) $(CFLAGS) -o test8 test8.cpp libCmm.a 
+  testmsw1: testmsw1.c libCmm.a
+  	$(CC) $(CFLAGS) -g -o testmsw1 testmsw1.c libCmm.a
+  testmsw2: testmsw2.c libCmm.a
+--- 82,87 ----
+diff -c /home/omega/attardi/posso/cmm/cmm.cpp /project/posso/cmm/curr/cmm/cmm.cpp
+*** /home/omega/attardi/posso/cmm/cmm.cpp	Tue Feb 25 16:05:18 1997
+--- /project/posso/cmm/curr/cmm/cmm.cpp	Fri Jan  3 12:16:53 1997
+***************
+*** 1091,1104 ****
+  	    {
+  	      assert(inStableSpace(page) || pageSpace[page] == SCANNEDSPACE);
+  	      MARK(p);
+! 	      if (!(page == scanning && p > (GCP)loc))
+! 		// it is not further in the page being scanned
+! 	        if (SCANNED(page) // or p was not traversed when page was scanned
+! #                   if HEADER_SIZE
+! 		    && HEADER_TAG(p[-HEADER_SIZE]) == OBJECT_TAG
+! #                   endif
+! 		    )
+! 		  ((CmmObject *)p)->traverse();
+  	    }
+  #         endif			// MARKING
+  	}
+--- 1091,1102 ----
+  	    {
+  	      assert(inStableSpace(page) || pageSpace[page] == SCANNEDSPACE);
+  	      MARK(p);
+! 	      if (SCANNED(page)	// p was not traversed when page was scanned
+! #                 if HEADER_SIZE
+! 		  && HEADER_TAG(p[-HEADER_SIZE]) == OBJECT_TAG
+! #                 endif
+! 		  )
+! 		((CmmObject *)p)->traverse();
+  	    }
+  #         endif			// MARKING
+  	}
+***************
+*** 1206,1212 ****
+  	  promotePage((GCP)*fp++);
+        }
+      /* Examine the uncollected heap:		*/
+-     /* Should scan all opaque heaps		*/
+      if (Cmm::flags & CMM_HEAPROOTS)
+        {
+  	WHEN_VERBOSE (CMM_HEAPLOG,
+--- 1204,1209 ----
+***************
+*** 1239,1245 ****
+      {
+  #     ifdef MARKING		// pointers to unmarked objects within
+        SET_SCANNED(page);	// this page will have to be traversed
+-       scanning = page;
+  #     endif			// recursively by scavenge
+        cp = pageToGCP(page);
+        WHEN_VERBOSE (CMM_DEBUGLOG, fprintf(stderr, "sweeping 0x%x\n", cp));
+--- 1236,1241 ----
+***************
+*** 1277,1283 ****
+    {
+      /* Restore scanned pages to STABLESPACE */
+      Page scan = queueHead;
+!     while (scan)
+        {
+  	pageSpace[scan] = STABLESPACE;
+  	scan = pageLink[scan];
+--- 1273,1279 ----
+    {
+      /* Restore scanned pages to STABLESPACE */
+      Page scan = queueHead;
+!     while (scan != lastStable)
+        {
+  	pageSpace[scan] = STABLESPACE;
+  	scan = pageLink[scan];
+***************
+*** 1689,1694 ****
+--- 1685,1712 ----
+    (((CmmObject *)obj)->heap())->reclaim((GCP)obj);
+  }
+  
++ #ifndef _WIN32
++ /*---------------------------------------------------------------------------*
++  *
++  * CmmObject::operator new[]
++  *
++  *---------------------------------------------------------------------------*/
++ void *
++ CmmObject::operator new[](size_t size, CmmHeap *heap)
++ {
++   return sizeof(CmmVarObject) + (char*) (new(size, heap) CmmVarObject);
++ }
++ /*---------------------------------------------------------------------------*
++  *
++  * CmmObject::operator delete[]
++  *
++  *---------------------------------------------------------------------------*/
++ void
++ CmmObject::operator delete[](void* obj)
++ {
++   delete obj;
++ }
++ #endif				// _WIN32
+  /*---------------------------------------------------------------------------*
+   *
+   * CmmVarObject::operator new
+diff -c /home/omega/attardi/posso/cmm/cmm.h /project/posso/cmm/curr/cmm/cmm.h
+*** /home/omega/attardi/posso/cmm/cmm.h	Thu Feb 20 12:41:45 1997
+--- /project/posso/cmm/curr/cmm/cmm.h	Mon Dec 23 12:21:01 1996
+***************
+*** 599,605 ****
+  
+    int reservedPages;		// pages reserved for this heap
+  
+!  protected:
+    bool opaque;			// controls whether collectors for other heaps
+  				// should traverse this heap
+  };
+--- 599,605 ----
+  
+    int reservedPages;		// pages reserved for this heap
+  
+!  private:
+    bool opaque;			// controls whether collectors for other heaps
+  				// should traverse this heap
+  };
+***************
+*** 615,625 ****
+  {
+  public:
+  
+-   UncollectedHeap()
+-     {
+-       opaque = true;
+-     }
+- 
+    GCP alloc(unsigned long size) { return (GCP)malloc(size); }
+  
+    void reclaim(GCP ptr) { free(ptr); }
+--- 615,620 ----
+***************
+*** 649,657 ****
+    Page firstUnusedPage;		// where to start looking for unused pages
+    Page firstReservedPage;	// first page used by this Heap
+    Page lastReservedPage;	// last page used by this Heap
+- 
+- private:
+-   Page scanning;		// page being scanned
+  };
+  
+  /*---------------------------------------------------------------------------*
+--- 644,649 ----
+***************
+*** 713,719 ****
+  #ifdef MARKING
+    inline void mark() { MARK(this); }
+  
+!   inline bool marked() { return (MARKED(this)); }
+  #endif
+  
+    inline int forwarded()
+--- 705,711 ----
+  #ifdef MARKING
+    inline void mark() { MARK(this); }
+  
+!   inline bool isMarked() { return (MARKED(this)); }
+  #endif
+  
+    inline int forwarded()
+***************
+*** 819,825 ****
+  visit(CmmObject* ptr)
+  {
+  #ifdef MARKING
+!   if (!ptr->marked())
+      {
+        ptr->mark();
+        ptr->traverse();
+--- 811,817 ----
+  visit(CmmObject* ptr)
+  {
+  #ifdef MARKING
+!   if (!ptr->isMarked())
+      {
+        ptr->mark();
+        ptr->traverse();
+diff -c /home/omega/attardi/posso/cmm/cmm.mak /project/posso/cmm/curr/cmm/cmm.mak
+*** /home/omega/attardi/posso/cmm/cmm.mak	Wed Dec 18 20:19:04 1996
+--- /project/posso/cmm/curr/cmm/cmm.mak	Sat Jan  4 10:49:38 1997
+***************
+*** 10,16 ****
+  !ENDIF 
+  
+  !IF "$(CFG)" != "cmm - Win32 Release" && "$(CFG)" != "cmm - Win32 Debug" &&\
+-  "$(CFG)" != "lib - Win32 Release" && "$(CFG)" != "lib - Win32 Debug" &&\
+   "$(CFG)" != "test2 - Win32 Debug" && "$(CFG)" != "test3 - Win32 Debug" &&\
+   "$(CFG)" != "test4 - Win32 Debug" && "$(CFG)" != "test5 - Win32 Debug" &&\
+   "$(CFG)" != "test6 - Win32 Debug"
+--- 10,15 ----
+***************
+*** 24,31 ****
+  !MESSAGE 
+  !MESSAGE "cmm - Win32 Release" (based on "Win32 (x86) Static Library")
+  !MESSAGE "cmm - Win32 Debug" (based on "Win32 (x86) Static Library")
+- !MESSAGE "lib - Win32 Release" (based on "Win32 (x86) Static Library")
+- !MESSAGE "lib - Win32 Debug" (based on "Win32 (x86) Static Library")
+  !MESSAGE "test2 - Win32 Debug" (based on "Win32 (x86) Console Application")
+  !MESSAGE "test3 - Win32 Debug" (based on "Win32 (x86) Console Application")
+  !MESSAGE "test4 - Win32 Debug" (based on "Win32 (x86) Console Application")
+--- 23,28 ----
+***************
+*** 42,48 ****
+  !ENDIF 
+  ################################################################################
+  # Begin Project
+! # PROP Target_Last_Scanned "test3 - Win32 Debug"
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
+--- 39,45 ----
+  !ENDIF 
+  ################################################################################
+  # Begin Project
+! # PROP Target_Last_Scanned "cmm - Win32 Debug"
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
+***************
+*** 59,191 ****
+  OUTDIR=.\Release
+  INTDIR=.\Release
+  
+- ALL : "lib - Win32 Release" 
+- 
+- CLEAN : 
+- 	-@erase 
+- 
+- "$(OUTDIR)" :
+-     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+- 
+- CPP=cl.exe
+- # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
+- # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
+- CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS"\
+-  /Fp"$(INTDIR)/cmm.pch" /YX /Fo"$(INTDIR)/" /c 
+- CPP_OBJS=.\Release/
+- CPP_SBRS=
+- 
+- .c{$(CPP_OBJS)}.obj:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cpp{$(CPP_OBJS)}.obj:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cxx{$(CPP_OBJS)}.obj:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .c{$(CPP_SBRS)}.sbr:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cpp{$(CPP_SBRS)}.sbr:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cxx{$(CPP_SBRS)}.sbr:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- BSC32=bscmake.exe
+- # ADD BASE BSC32 /nologo
+- # ADD BSC32 /nologo
+- BSC32_FLAGS=/nologo /o"$(OUTDIR)/cmm.bsc" 
+- BSC32_SBRS=
+- LIB32=link.exe -lib
+- # ADD BASE LIB32 /nologo
+- # ADD LIB32 /nologo
+- LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+- LIB32_OBJS=
+- 
+- !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+- 
+- # PROP BASE Use_MFC 0
+- # PROP BASE Use_Debug_Libraries 1
+- # PROP BASE Output_Dir "cmm___Wi"
+- # PROP BASE Intermediate_Dir "cmm___Wi"
+- # PROP BASE Target_Dir ""
+- # PROP Use_MFC 0
+- # PROP Use_Debug_Libraries 1
+- # PROP Output_Dir "Debug"
+- # PROP Intermediate_Dir "Debug"
+- # PROP Target_Dir ""
+- OUTDIR=.\Debug
+- INTDIR=.\Debug
+- 
+- ALL : "test6 - Win32 Debug" "test5 - Win32 Debug" "test4 - Win32 Debug"\
+-  "test3 - Win32 Debug" "test2 - Win32 Debug" "lib - Win32 Debug" 
+- 
+- CLEAN : 
+- 	-@erase 
+- 
+- "$(OUTDIR)" :
+-     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+- 
+- CPP=cl.exe
+- # ADD BASE CPP /nologo /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
+- # ADD CPP /nologo /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
+- CPP_PROJ=/nologo /MLd /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS"\
+-  /Fp"$(INTDIR)/cmm.pch" /YX /Fo"$(INTDIR)/" /c 
+- CPP_OBJS=.\Debug/
+- CPP_SBRS=
+- 
+- .c{$(CPP_OBJS)}.obj:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cpp{$(CPP_OBJS)}.obj:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cxx{$(CPP_OBJS)}.obj:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .c{$(CPP_SBRS)}.sbr:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cpp{$(CPP_SBRS)}.sbr:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- .cxx{$(CPP_SBRS)}.sbr:
+-    $(CPP) $(CPP_PROJ) $<  
+- 
+- BSC32=bscmake.exe
+- # ADD BASE BSC32 /nologo
+- # ADD BSC32 /nologo
+- BSC32_FLAGS=/nologo /o"$(OUTDIR)/cmm.bsc" 
+- BSC32_SBRS=
+- LIB32=link.exe -lib
+- # ADD BASE LIB32 /nologo
+- # ADD LIB32 /nologo
+- LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+- LIB32_OBJS=
+- 
+- !ELSEIF  "$(CFG)" == "lib - Win32 Release"
+- 
+- # PROP BASE Use_MFC 0
+- # PROP BASE Use_Debug_Libraries 0
+- # PROP BASE Output_Dir "lib\Release"
+- # PROP BASE Intermediate_Dir "lib\Release"
+- # PROP BASE Target_Dir "lib"
+- # PROP Use_MFC 0
+- # PROP Use_Debug_Libraries 0
+- # PROP Output_Dir "Release"
+- # PROP Intermediate_Dir "Release"
+- # PROP Target_Dir "lib"
+- OUTDIR=.\Release
+- INTDIR=.\Release
+- 
+  ALL : "$(OUTDIR)\cmm.lib"
+  
+  CLEAN : 
+  	-@erase ".\Release\cmm.lib"
+- 	-@erase ".\Release\memory.obj"
+  	-@erase ".\Release\tempheap.obj"
+  	-@erase ".\Release\cmm.obj"
+  	-@erase ".\Release\msw.obj"
+  
+--- 56,67 ----
+  OUTDIR=.\Release
+  INTDIR=.\Release
+  
+  ALL : "$(OUTDIR)\cmm.lib"
+  
+  CLEAN : 
+  	-@erase ".\Release\cmm.lib"
+  	-@erase ".\Release\tempheap.obj"
++ 	-@erase ".\Release\memory.obj"
+  	-@erase ".\Release\cmm.obj"
+  	-@erase ".\Release\msw.obj"
+  
+***************
+*** 196,202 ****
+  # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
+  # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
+  CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS"\
+!  /Fp"$(INTDIR)/lib.pch" /YX /Fo"$(INTDIR)/" /c 
+  CPP_OBJS=.\Release/
+  CPP_SBRS=
+  
+--- 72,78 ----
+  # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
+  # ADD CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
+  CPP_PROJ=/nologo /ML /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS"\
+!  /Fp"$(INTDIR)/cmm.pch" /YX /Fo"$(INTDIR)/" /c 
+  CPP_OBJS=.\Release/
+  CPP_SBRS=
+  
+***************
+*** 221,235 ****
+  BSC32=bscmake.exe
+  # ADD BASE BSC32 /nologo
+  # ADD BSC32 /nologo
+! BSC32_FLAGS=/nologo /o"$(OUTDIR)/lib.bsc" 
+  BSC32_SBRS=
+  LIB32=link.exe -lib
+  # ADD BASE LIB32 /nologo
+! # ADD LIB32 /nologo /out:"Release\cmm.lib"
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+- 	"$(INTDIR)/memory.obj" \
+  	"$(INTDIR)/tempheap.obj" \
+  	"$(INTDIR)/cmm.obj" \
+  	"$(INTDIR)/msw.obj"
+  
+--- 97,111 ----
+  BSC32=bscmake.exe
+  # ADD BASE BSC32 /nologo
+  # ADD BSC32 /nologo
+! BSC32_FLAGS=/nologo /o"$(OUTDIR)/cmm.bsc" 
+  BSC32_SBRS=
+  LIB32=link.exe -lib
+  # ADD BASE LIB32 /nologo
+! # ADD LIB32 /nologo
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+  	"$(INTDIR)/tempheap.obj" \
++ 	"$(INTDIR)/memory.obj" \
+  	"$(INTDIR)/cmm.obj" \
+  	"$(INTDIR)/msw.obj"
+  
+***************
+*** 238,255 ****
+    $(LIB32_FLAGS) $(DEF_FLAGS) $(LIB32_OBJS)
+  <<
+  
+! !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+  # PROP BASE Use_Debug_Libraries 1
+! # PROP BASE Output_Dir "lib\Debug"
+! # PROP BASE Intermediate_Dir "lib\Debug"
+! # PROP BASE Target_Dir "lib"
+  # PROP Use_MFC 0
+  # PROP Use_Debug_Libraries 1
+  # PROP Output_Dir "Debug"
+  # PROP Intermediate_Dir "Debug"
+! # PROP Target_Dir "lib"
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+--- 114,131 ----
+    $(LIB32_FLAGS) $(DEF_FLAGS) $(LIB32_OBJS)
+  <<
+  
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  # PROP BASE Use_MFC 0
+  # PROP BASE Use_Debug_Libraries 1
+! # PROP BASE Output_Dir "cmm___Wi"
+! # PROP BASE Intermediate_Dir "cmm___Wi"
+! # PROP BASE Target_Dir ""
+  # PROP Use_MFC 0
+  # PROP Use_Debug_Libraries 1
+  # PROP Output_Dir "Debug"
+  # PROP Intermediate_Dir "Debug"
+! # PROP Target_Dir ""
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+***************
+*** 257,266 ****
+  
+  CLEAN : 
+  	-@erase ".\Debug\cmm.lib"
+! 	-@erase ".\Debug\memory.obj"
+  	-@erase ".\Debug\cmm.obj"
+  	-@erase ".\Debug\msw.obj"
+! 	-@erase ".\Debug\tempheap.obj"
+  
+  "$(OUTDIR)" :
+      if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+--- 133,142 ----
+  
+  CLEAN : 
+  	-@erase ".\Debug\cmm.lib"
+! 	-@erase ".\Debug\tempheap.obj"
+  	-@erase ".\Debug\cmm.obj"
+  	-@erase ".\Debug\msw.obj"
+! 	-@erase ".\Debug\memory.obj"
+  
+  "$(OUTDIR)" :
+      if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+***************
+*** 269,275 ****
+  # ADD BASE CPP /nologo /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
+  # ADD CPP /nologo /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
+  CPP_PROJ=/nologo /MLd /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS"\
+!  /Fp"$(INTDIR)/lib.pch" /YX /Fo"$(INTDIR)/" /c 
+  CPP_OBJS=.\Debug/
+  CPP_SBRS=
+  
+--- 145,151 ----
+  # ADD BASE CPP /nologo /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
+  # ADD CPP /nologo /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /YX /c
+  CPP_PROJ=/nologo /MLd /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS"\
+!  /Fp"$(INTDIR)/cmm.pch" /YX /Fo"$(INTDIR)/" /c 
+  CPP_OBJS=.\Debug/
+  CPP_SBRS=
+  
+***************
+*** 294,310 ****
+  BSC32=bscmake.exe
+  # ADD BASE BSC32 /nologo
+  # ADD BSC32 /nologo
+! BSC32_FLAGS=/nologo /o"$(OUTDIR)/lib.bsc" 
+  BSC32_SBRS=
+  LIB32=link.exe -lib
+  # ADD BASE LIB32 /nologo
+! # ADD LIB32 /nologo /out:"Debug\cmm.lib"
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+! 	"$(INTDIR)/memory.obj" \
+  	"$(INTDIR)/cmm.obj" \
+  	"$(INTDIR)/msw.obj" \
+! 	"$(INTDIR)/tempheap.obj"
+  
+  "$(OUTDIR)\cmm.lib" : "$(OUTDIR)" $(DEF_FILE) $(LIB32_OBJS)
+      $(LIB32) @<<
+--- 170,186 ----
+  BSC32=bscmake.exe
+  # ADD BASE BSC32 /nologo
+  # ADD BSC32 /nologo
+! BSC32_FLAGS=/nologo /o"$(OUTDIR)/cmm.bsc" 
+  BSC32_SBRS=
+  LIB32=link.exe -lib
+  # ADD BASE LIB32 /nologo
+! # ADD LIB32 /nologo
+  LIB32_FLAGS=/nologo /out:"$(OUTDIR)/cmm.lib" 
+  LIB32_OBJS= \
+! 	"$(INTDIR)/tempheap.obj" \
+  	"$(INTDIR)/cmm.obj" \
+  	"$(INTDIR)/msw.obj" \
+! 	"$(INTDIR)/memory.obj"
+  
+  "$(OUTDIR)\cmm.lib" : "$(OUTDIR)" $(DEF_FILE) $(LIB32_OBJS)
+      $(LIB32) @<<
+***************
+*** 326,332 ****
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "lib - Win32 Debug" "$(OUTDIR)\test2.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+--- 202,208 ----
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "$(OUTDIR)\test2.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+***************
+*** 375,388 ****
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
+!  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
+!  odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test2.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test2.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test2.obj" \
+! 	".\Debug\cmm.lib"
+  
+  "$(OUTDIR)\test2.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+--- 251,263 ----
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib\
+!  comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib\
+!  odbc32.lib odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test2.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test2.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test2.obj"
+  
+  "$(OUTDIR)\test2.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+***************
+*** 404,410 ****
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "lib - Win32 Debug" "$(OUTDIR)\test3.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+--- 279,285 ----
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "$(OUTDIR)\test3.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+***************
+*** 453,466 ****
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
+!  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
+!  odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test3.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test3.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test3.obj" \
+! 	".\Debug\cmm.lib"
+  
+  "$(OUTDIR)\test3.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+--- 328,340 ----
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib\
+!  comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib\
+!  odbc32.lib odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test3.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test3.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test3.obj"
+  
+  "$(OUTDIR)\test3.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+***************
+*** 482,488 ****
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "lib - Win32 Debug" "$(OUTDIR)\test4.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+--- 356,362 ----
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "$(OUTDIR)\test4.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+***************
+*** 531,544 ****
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
+!  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
+!  odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test4.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test4.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test4.obj" \
+! 	".\Debug\cmm.lib"
+  
+  "$(OUTDIR)\test4.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+--- 405,417 ----
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib\
+!  comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib\
+!  odbc32.lib odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test4.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test4.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test4.obj"
+  
+  "$(OUTDIR)\test4.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+***************
+*** 560,566 ****
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "lib - Win32 Debug" "$(OUTDIR)\test5.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+--- 433,439 ----
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "$(OUTDIR)\test5.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+***************
+*** 609,622 ****
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
+!  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
+!  odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test5.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test5.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test5.obj" \
+! 	".\Debug\cmm.lib"
+  
+  "$(OUTDIR)\test5.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+--- 482,494 ----
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib\
+!  comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib\
+!  odbc32.lib odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test5.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test5.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test5.obj"
+  
+  "$(OUTDIR)\test5.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+***************
+*** 638,644 ****
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "lib - Win32 Debug" "$(OUTDIR)\test6.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+--- 510,516 ----
+  OUTDIR=.\Debug
+  INTDIR=.\Debug
+  
+! ALL : "$(OUTDIR)\test6.exe"
+  
+  CLEAN : 
+  	-@erase ".\Debug\vc40.pdb"
+***************
+*** 687,700 ****
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib\
+!  advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib\
+!  odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test6.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test6.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test6.obj" \
+! 	".\Debug\cmm.lib"
+  
+  "$(OUTDIR)\test6.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+--- 559,571 ----
+  BSC32_SBRS=
+  LINK32=link.exe
+  # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! # ADD LINK32 Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /debug /machine:I386
+! LINK32_FLAGS=Debug/cmm.lib kernel32.lib user32.lib gdi32.lib winspool.lib\
+!  comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib\
+!  odbc32.lib odbccp32.lib /nologo /subsystem:console /incremental:yes\
+   /pdb:"$(OUTDIR)/test6.pdb" /debug /machine:I386 /out:"$(OUTDIR)/test6.exe" 
+  LINK32_OBJS= \
+! 	"$(INTDIR)/test6.obj"
+  
+  "$(OUTDIR)\test6.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+      $(LINK32) @<<
+***************
+*** 716,846 ****
+  !ENDIF 
+  
+  ################################################################################
+! # Begin Project Dependency
+! 
+! # Project_Dep_Name "lib"
+! 
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+! 
+! "lib - Win32 Release" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Release" 
+! 
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+! 
+! "lib - Win32 Debug" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+! 
+! !ENDIF 
+! 
+! # End Project Dependency
+! ################################################################################
+! # Begin Project Dependency
+! 
+! # Project_Dep_Name "test2"
+! 
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+! 
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+! 
+! "test2 - Win32 Debug" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test2 - Win32 Debug" 
+! 
+! !ENDIF 
+! 
+! # End Project Dependency
+! ################################################################################
+! # Begin Project Dependency
+! 
+! # Project_Dep_Name "test3"
+! 
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+! 
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+! 
+! "test3 - Win32 Debug" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test3 - Win32 Debug" 
+! 
+! !ENDIF 
+! 
+! # End Project Dependency
+! ################################################################################
+! # Begin Project Dependency
+! 
+! # Project_Dep_Name "test4"
+! 
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+! 
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+! 
+! "test4 - Win32 Debug" : 
+!    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test4 - Win32 Debug" 
+! 
+! !ENDIF 
+! 
+! # End Project Dependency
+! ################################################################################
+! # Begin Project Dependency
+! 
+! # Project_Dep_Name "test5"
+  
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+  
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+- "test5 - Win32 Debug" : 
+-    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test5 - Win32 Debug" 
+  
+! !ENDIF 
+! 
+! # End Project Dependency
+  ################################################################################
+! # Begin Project Dependency
+  
+! # Project_Dep_Name "test6"
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
+  !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+- "test6 - Win32 Debug" : 
+-    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="test6 - Win32 Debug" 
+- 
+- !ENDIF 
+- 
+- # End Project Dependency
+- # End Target
+- ################################################################################
+- # Begin Target
+- 
+- # Name "lib - Win32 Release"
+- # Name "lib - Win32 Debug"
+- 
+- !IF  "$(CFG)" == "lib - Win32 Release"
+- 
+- !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+- 
+- !ENDIF 
+- 
+- ################################################################################
+- # Begin Source File
+- 
+- SOURCE=.\tempheap.h
+- 
+- !IF  "$(CFG)" == "lib - Win32 Release"
+- 
+- !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+- 
+  !ENDIF 
+  
+  # End Source File
+  ################################################################################
+  # Begin Source File
+  
+! SOURCE=.\cmm.h
+  
+! !IF  "$(CFG)" == "lib - Win32 Release"
+  
+! !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+  
+  !ENDIF 
+  
+--- 587,625 ----
+  !ENDIF 
+  
+  ################################################################################
+! # Begin Source File
+  
+! SOURCE=.\cmm.cpp
+! DEP_CPP_CMM_C=\
+! 	".\cmm.h"\
+! 	".\machine.h"\
+! 	".\msw.h"\
+! 	
+  
+! "$(INTDIR)\cmm.obj" : $(SOURCE) $(DEP_CPP_CMM_C) "$(INTDIR)"
+  
+  
+! # End Source File
+  ################################################################################
+! # Begin Source File
+  
+! SOURCE=.\cmm.h
+  
+  !IF  "$(CFG)" == "cmm - Win32 Release"
+  
+  !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  !ENDIF 
+  
+  # End Source File
+  ################################################################################
+  # Begin Source File
+  
+! SOURCE=.\machine.h
+  
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+  
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  !ENDIF 
+  
+***************
+*** 848,860 ****
+  ################################################################################
+  # Begin Source File
+  
+! SOURCE=.\machine.h
+! 
+! !IF  "$(CFG)" == "lib - Win32 Release"
+  
+! !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+  
+- !ENDIF 
+  
+  # End Source File
+  ################################################################################
+--- 627,639 ----
+  ################################################################################
+  # Begin Source File
+  
+! SOURCE=.\memory.cpp
+! DEP_CPP_MEMOR=\
+! 	".\machine.h"\
+! 	
+  
+! "$(INTDIR)\memory.obj" : $(SOURCE) $(DEP_CPP_MEMOR) "$(INTDIR)"
+  
+  
+  # End Source File
+  ################################################################################
+***************
+*** 863,869 ****
+  SOURCE=.\msw.cpp
+  DEP_CPP_MSW_C=\
+  	".\cmm.h"\
+! 	{$(INCLUDE)}"\sys\Types.h"\
+  	".\machine.h"\
+  	".\msw.h"\
+  	
+--- 642,648 ----
+  SOURCE=.\msw.cpp
+  DEP_CPP_MSW_C=\
+  	".\cmm.h"\
+! 	{$(INCLUDE)}"\sys\types.h"\
+  	".\machine.h"\
+  	".\msw.h"\
+  	
+***************
+*** 877,885 ****
+  
+  SOURCE=.\msw.h
+  
+! !IF  "$(CFG)" == "lib - Win32 Release"
+  
+! !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+  
+  !ENDIF 
+  
+--- 656,664 ----
+  
+  SOURCE=.\msw.h
+  
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+  
+! !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  !ENDIF 
+  
+***************
+*** 902,963 ****
+  ################################################################################
+  # Begin Source File
+  
+! SOURCE=.\cmm.cpp
+! 
+! !IF  "$(CFG)" == "lib - Win32 Release"
+! 
+! DEP_CPP_CMM_C=\
+! 	".\cmm.h"\
+! 	".\machine.h"\
+! 	".\msw.h"\
+! 	
+! NODEP_CPP_CMM_C=\
+! 	".\heap"\
+! 	".\if"\
+! 	
+! 
+! "$(INTDIR)\cmm.obj" : $(SOURCE) $(DEP_CPP_CMM_C) "$(INTDIR)"
+! 
+! 
+! !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+! 
+! DEP_CPP_CMM_C=\
+! 	".\cmm.h"\
+! 	".\machine.h"\
+! 	".\msw.h"\
+! 	
+! 
+! "$(INTDIR)\cmm.obj" : $(SOURCE) $(DEP_CPP_CMM_C) "$(INTDIR)"
+! 
+! 
+! !ENDIF 
+! 
+! # End Source File
+! ################################################################################
+! # Begin Source File
+! 
+! SOURCE=.\memory.cpp
+! 
+! !IF  "$(CFG)" == "lib - Win32 Release"
+! 
+! DEP_CPP_MEMOR=\
+! 	".\machine.h"\
+! 	
+! NODEP_CPP_MEMOR=\
+! 	".\CmmLeastDescribedAddress"\
+! 	
+! 
+! "$(INTDIR)\memory.obj" : $(SOURCE) $(DEP_CPP_MEMOR) "$(INTDIR)"
+! 
+! 
+! !ELSEIF  "$(CFG)" == "lib - Win32 Debug"
+! 
+! DEP_CPP_MEMOR=\
+! 	".\machine.h"\
+! 	
+  
+! "$(INTDIR)\memory.obj" : $(SOURCE) $(DEP_CPP_MEMOR) "$(INTDIR)"
+  
+  
+  !ENDIF 
+  
+--- 681,691 ----
+  ################################################################################
+  # Begin Source File
+  
+! SOURCE=.\tempheap.h
+  
+! !IF  "$(CFG)" == "cmm - Win32 Release"
+  
++ !ELSEIF  "$(CFG)" == "cmm - Win32 Debug"
+  
+  !ENDIF 
+  
+***************
+*** 968,989 ****
+  
+  # Name "test2 - Win32 Debug"
+  ################################################################################
+! # Begin Project Dependency
+  
+! # Project_Dep_Name "lib"
+  
+  !IF  "$(CFG)" == "test2 - Win32 Debug"
+  
+- "lib - Win32 Debug" : 
+-    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+- 
+- !ENDIF 
+- 
+- # End Project Dependency
+- ################################################################################
+- # Begin Source File
+- 
+- SOURCE=.\test2.cpp
+  DEP_CPP_TEST2=\
+  	".\cmm.h"\
+  	".\machine.h"\
+--- 696,707 ----
+  
+  # Name "test2 - Win32 Debug"
+  ################################################################################
+! # Begin Source File
+  
+! SOURCE=.\test2.cpp
+  
+  !IF  "$(CFG)" == "test2 - Win32 Debug"
+  
+  DEP_CPP_TEST2=\
+  	".\cmm.h"\
+  	".\machine.h"\
+***************
+*** 993,998 ****
+--- 711,718 ----
+  "$(INTDIR)\test2.obj" : $(SOURCE) $(DEP_CPP_TEST2) "$(INTDIR)"
+  
+  
++ !ENDIF 
++ 
+  # End Source File
+  # End Target
+  ################################################################################
+***************
+*** 1000,1021 ****
+  
+  # Name "test3 - Win32 Debug"
+  ################################################################################
+! # Begin Project Dependency
+  
+! # Project_Dep_Name "lib"
+  
+  !IF  "$(CFG)" == "test3 - Win32 Debug"
+  
+- "lib - Win32 Debug" : 
+-    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+- 
+- !ENDIF 
+- 
+- # End Project Dependency
+- ################################################################################
+- # Begin Source File
+- 
+- SOURCE=.\test3.cpp
+  DEP_CPP_TEST3=\
+  	".\cmm.h"\
+  	".\machine.h"\
+--- 720,731 ----
+  
+  # Name "test3 - Win32 Debug"
+  ################################################################################
+! # Begin Source File
+  
+! SOURCE=.\test3.cpp
+  
+  !IF  "$(CFG)" == "test3 - Win32 Debug"
+  
+  DEP_CPP_TEST3=\
+  	".\cmm.h"\
+  	".\machine.h"\
+***************
+*** 1025,1030 ****
+--- 735,742 ----
+  "$(INTDIR)\test3.obj" : $(SOURCE) $(DEP_CPP_TEST3) "$(INTDIR)"
+  
+  
++ !ENDIF 
++ 
+  # End Source File
+  # End Target
+  ################################################################################
+***************
+*** 1032,1061 ****
+  
+  # Name "test4 - Win32 Debug"
+  ################################################################################
+! # Begin Project Dependency
+  
+! # Project_Dep_Name "lib"
+  
+  !IF  "$(CFG)" == "test4 - Win32 Debug"
+  
+- "lib - Win32 Debug" : 
+-    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+- 
+- !ENDIF 
+- 
+- # End Project Dependency
+- ################################################################################
+- # Begin Source File
+- 
+- SOURCE=.\test4.cpp
+  DEP_CPP_TEST4=\
+  	".\cmm.h"\
+  	".\machine.h"\
+  	
+  
+  "$(INTDIR)\test4.obj" : $(SOURCE) $(DEP_CPP_TEST4) "$(INTDIR)"
+  
+  
+  # End Source File
+  # End Target
+  ################################################################################
+--- 744,766 ----
+  
+  # Name "test4 - Win32 Debug"
+  ################################################################################
+! # Begin Source File
+  
+! SOURCE=.\test4.cpp
+  
+  !IF  "$(CFG)" == "test4 - Win32 Debug"
+  
+  DEP_CPP_TEST4=\
+  	".\cmm.h"\
+  	".\machine.h"\
++ 	".\msw.h"\
+  	
+  
+  "$(INTDIR)\test4.obj" : $(SOURCE) $(DEP_CPP_TEST4) "$(INTDIR)"
+  
+  
++ !ENDIF 
++ 
+  # End Source File
+  # End Target
+  ################################################################################
+***************
+*** 1063,1084 ****
+  
+  # Name "test5 - Win32 Debug"
+  ################################################################################
+! # Begin Project Dependency
+  
+! # Project_Dep_Name "lib"
+  
+  !IF  "$(CFG)" == "test5 - Win32 Debug"
+  
+- "lib - Win32 Debug" : 
+-    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+- 
+- !ENDIF 
+- 
+- # End Project Dependency
+- ################################################################################
+- # Begin Source File
+- 
+- SOURCE=.\test5.cpp
+  DEP_CPP_TEST5=\
+  	".\tempheap.h"\
+  	".\cmm.h"\
+--- 768,779 ----
+  
+  # Name "test5 - Win32 Debug"
+  ################################################################################
+! # Begin Source File
+  
+! SOURCE=.\test5.cpp
+  
+  !IF  "$(CFG)" == "test5 - Win32 Debug"
+  
+  DEP_CPP_TEST5=\
+  	".\tempheap.h"\
+  	".\cmm.h"\
+***************
+*** 1089,1094 ****
+--- 784,791 ----
+  "$(INTDIR)\test5.obj" : $(SOURCE) $(DEP_CPP_TEST5) "$(INTDIR)"
+  
+  
++ !ENDIF 
++ 
+  # End Source File
+  # End Target
+  ################################################################################
+***************
+*** 1096,1117 ****
+  
+  # Name "test6 - Win32 Debug"
+  ################################################################################
+! # Begin Project Dependency
+  
+! # Project_Dep_Name "lib"
+  
+  !IF  "$(CFG)" == "test6 - Win32 Debug"
+  
+- "lib - Win32 Debug" : 
+-    $(MAKE) /$(MAKEFLAGS) /F .\cmm.mak CFG="lib - Win32 Debug" 
+- 
+- !ENDIF 
+- 
+- # End Project Dependency
+- ################################################################################
+- # Begin Source File
+- 
+- SOURCE=.\test6.cpp
+  DEP_CPP_TEST6=\
+  	".\tempheap.h"\
+  	".\cmm.h"\
+--- 793,804 ----
+  
+  # Name "test6 - Win32 Debug"
+  ################################################################################
+! # Begin Source File
+  
+! SOURCE=.\test6.cpp
+  
+  !IF  "$(CFG)" == "test6 - Win32 Debug"
+  
+  DEP_CPP_TEST6=\
+  	".\tempheap.h"\
+  	".\cmm.h"\
+***************
+*** 1121,1126 ****
+--- 808,815 ----
+  
+  "$(INTDIR)\test6.obj" : $(SOURCE) $(DEP_CPP_TEST6) "$(INTDIR)"
+  
++ 
++ !ENDIF 
+  
+  # End Source File
+  # End Target
+Common subdirectories: /home/omega/attardi/posso/cmm/doc and /project/posso/cmm/curr/cmm/doc
+diff -c /home/omega/attardi/posso/cmm/test5.cpp /project/posso/cmm/curr/cmm/test5.cpp
+*** /home/omega/attardi/posso/cmm/test5.cpp	Thu Jan  9 11:07:13 1997
+--- /project/posso/cmm/curr/cmm/test5.cpp	Sat Nov 23 12:54:54 1996
+***************
+*** 1,10 ****
+! /* Test program for CMM */
+  
+  /* Externals */
+  
+  #include <stdio.h>
+  #include <stdlib.h>
+! #include "cmm.h"
+  
+  struct  cell : CmmObject 
+  {
+--- 1,10 ----
+! /* Test program for the gcalloc.c */
+  
+  /* Externals */
+  
+  #include <stdio.h>
+  #include <stdlib.h>
+! #include "tempheap.h"
+  
+  struct  cell : CmmObject 
+  {
+***************
+*** 195,200 ****
+--- 195,201 ----
+  void
+  main()
+  {
++ //  Cmm::heap = new TempHeap(10000);
+    /* List construction test */
+    listtest1();
+  
+diff -c /home/omega/attardi/posso/cmm/test7.cpp /project/posso/cmm/curr/cmm/test7.cpp
+*** /home/omega/attardi/posso/cmm/test7.cpp	Thu Jan  9 09:00:04 1997
+--- /project/posso/cmm/curr/cmm/test7.cpp	Wed Dec 18 20:56:47 1996
+***************
+*** 44,50 ****
+  void*
+  Item::operator new[](size_t size)
+  {
+!   return sizeof(size_t) + (char*)new(size) CmmArray<Item>;
+  }
+  
+  void
+--- 44,50 ----
+  void*
+  Item::operator new[](size_t size)
+  {
+!   return sizeof(CmmObject) + (char*)new(size) CmmArray<Item>;
+  }
+  
+  void
+Only in /home/omega/attardi/posso/cmm: test8.cpp
