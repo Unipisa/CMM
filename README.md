@@ -1,19 +1,23 @@
-# Supporting the preservation of legacy source code.
+# CMM Workbench
 
-Instantiating this template creates a workbench to support the acquisition of legacy source code, according to [SWHAP](https://www.softwareheritage.org/swhap/), the [Software Heritage](https://www.softwareheritage.org/) Acquisition Process defined by the [SWHAP\@Pisa](
-    #TODO:
-) project.
+### This [SWHAPPE](https://github.com/Unipisa/SWHAPPE) workbench is for the acquisition of the source code of CMM, a Customisable Memory Manager.  
 
-The workbench comes with the predefined folders that are used in the supported process. Namely:
+-------------------
 
-- Folder [raw materials](./raw_materials) is for the original materials, as they have been found or submitted.
+__Please note: this file shall substitute the README md file of the repository, just after instantiation. This paragraph should be deleted.__
 
-- Folder [browsable source](./browsable_source) is for a browsable version of the source code. Source files, with the right extension, have to be accessible through the GitHub web interface, e.g., archives should be decompressed, code should be transcribed if provided by images, etc.
+This workbench comes with a few folders to support the process.
 
-- Folder [source](./source) is for the curated revision of the source code, as a base for the reconstruction of the development history as a git repository.
+Folder [raw materials](./raw_materials) is for the original materials, as they have been found or submitted.
 
-- Folder [metadata](/.metadata) holds various files with meta information (catalogue, actors, journal, tags) to be updated throughout the process. 
+Folder [browsable source](./browsable_source) is for a browsable version of the source code. Source files, with right extention, have to be accessible through the GitHub web interface, e.g., archives should be decompressed, immages should be trascibed, etc.
 
-Please note that this file need be **replaced** in the instantiated workbench.
+Folder [source](./source) is for the curated revision of the source code, as a base for the recontruction of the development history as a git repository, i.e., a folder for each major version of the code.
 
-Please look at the [SWHAPPE repository](https://github.com/Unipisa/SWHAPPE/README.md) and to the [guidelines](https://github.com/SoftwareHeritage/swhapguide/blob/master/SWHAP%40Pisa.pdf)  for more details. 
+Folder [metadata](./metadata) holds various files with meta information used throughout the process. 
+
+Folder [.swhap](./.swhap) holds the templates of the README files of the various repositories created in the process.
+
+Please look at the [SWHAPPE repository](https://github.com/Unipisa/SWHAPPE/README.md) and to the [guidelines](https://github.com/SoftwareHeritage/swhapguide/blob/master/SWHAP%40Pisa.pdf)  for more details.
+
+-------------------
