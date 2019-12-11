@@ -1,52 +1,95 @@
 {
     "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
     "@type": "SoftwareSourceCode",
-    "identifier": "a unique identifier",
-    "description": "a brief description of the software",
-    "applicationCategory" : "Type of software application, e.g. 'Game, Multimedia'",
-    "name": "software name",
-    "codeRepository":  "URL to related resources",
-    "license": "info about the license",
-    "version": "X.X",
+    "identifier": "CMM",
+    "description": "conservative garbage collector for C++ developed for PoSSo (Polynomial System Solver) project.",
+    "name": "Customizable Memory Management",
+    "codeRepository": "https://github.com/Unipisa/CMM",
+    "applicationCategory" : "Memory Management",
+    "license": "Copyright (C) 1993 Tito Flagella.\nThis file is part of the POSSO Customizable Memory Manager (CMM).\nPermission to use, copy, and modify this software and its documentation is\nhereby granted only under the following terms and conditions.  Both the\nabove copyright notice and this permission notice must appear in all copies\nof the software, derivative works or modified versions, and any portions\nthereof, and both notices must appear in supporting documentation.\nUsers of this software agree to the terms and conditions set forth herein,\nand agree to license at no charge to all parties under these terms and\nconditions any derivative works or modified versions of this software.\n\nThis software may be distributed (but not offered for sale or transferred\nfor compensation) to third parties, provided such third parties agree to\nabide by the terms and conditions of this notice.  \n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE COPYRIGHT HOLDERS DISCLAIM ALL\nWARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF\nMERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL THE COPYRIGHT HOLDERS\nBE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR\nANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER\nIN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT\nOF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.",
+    "version": "1.9",
     "keywords" : [
-        "tag for the software", 
-        "other tag"
+      "Garbage Collector", 
+      "Memory Management"
     ],
-    "releaseNotes" : "release notes and comments",
-    "funding" : "software funded by...(e.g. specific grant)",
-    "runtimePlatform" : "operating system",
-    "softwareRequirements" : ["dependencies and other requirements"],
-    "developmentStatus" : "from https://www.repostatus.org/ e.g. Unsupported", 
-    "dateCreated" : "YYYY-MM-DD",
-    "datePublished" : "YYYY-MM-DD",
-    "relatedLink" : ["https://..", "http://.."],
-    "programmingLanguage" : "main programming language",
-     "isPartOf" : "maybe the software is part of some project",
-    "referencePublication" : [ 
+    "runtimePlatform" : "SunOS 4.x, Solaris 2.x, Linux 1.x, 2.x, AIX (RS6000), SGI, Win32 (Windows 95, Windows NT), Digital OS (Alpha), MacOS (Metrowerks C++)",
+    "softwareRequirements" : ["g++"],
+    "developmentStatus" : "Unsupported",
+    "dateCreated" : "1994-08-27",
+    "datePublished" : "1995-08-26",
+      
+    "programmingLanguage" : "c++",
+     "isPartOf" : "PoSSo (Polynomial System Solver)",
+    "referencePublication" : [
       {
           "@type": "ScholarlyArticle",
-          "idendifier": "https://doi.org/xx.xxxx/xxxx.xxxx.xxxx",
-          "name": "title of publication"
+          "idendifier": "https://doi.org/10.1006/jsco.1996.0013",
+          "name": "Memory Mangement in the PoSSo Solver"
       }
       ],
     "author": [
       {
         "@type": "Person",
-        "givenName": "Given",
-        "familyName": "Family",
-        "affiliation" : "affiliation at the time of development",
-        "email": "given.family@org.com"
+        "givenName": "Giuseppe",
+        "familyName": "Attardi",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+      {
+        "@type": "Person",
+        "givenName": "Tito Flagella",
+        "familyName": "Tito Flagella",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+      {
+        "@type": "Person",
+        "givenName": "Pietro",
+        "familyName": "Iglio",
+         "affiliation" : "Dipartimento di Informatica, Università di Pisa"
       }
     ],
     "contributor": [
-    {
+      {
         "@type": "Person",
-        "givenName": "Given",
-        "familyName": "Family",
-        "affiliation" : "affiliation at the time of development",
-        "email": "given.family@org.com"
-    }
+        "givenName": "Carlo",
+        "familyName": "Traverso",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+      {
+        "@type": "Person",
+        "givenName": "Christian",
+        "familyName": "Heckler",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+      {
+        "@type": "Person",
+        "givenName": "Hans J.",
+        "familyName": "Boehm",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+      {
+        "@type": "Person",
+        "givenName": "Joachim",
+        "familyName": "Hollman",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+       {
+        "@type": "Person",
+        "givenName": "John",
+        "familyName": "Abbott",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+           {
+        "@type": "Person",
+        "givenName": "Patrick C. ",
+        "familyName": "Beard",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      },
+        {
+        "@type": "Person",
+        "givenName": "Uttam M.",
+        "familyName": "Narsu",
+        "affiliation" : "Dipartimento di Informatica, Università di Pisa"
+      }
     ]
-}
-
-
+  }
+   

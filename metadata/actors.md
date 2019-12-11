@@ -1,37 +1,68 @@
-## SWHAPPE actors.md Template
-
-Here we propose a template for `actors.md` for SWHAPPE.
-
-Each participant of the process should have a corresponding record on the `actors.md` with the structure below.
-
-Please note that:
-
-* Name and Surname of actors should be linked to their paragraph in [actors.md](./actors.md) file;
-* Items should be linked to the file [inside the repository](./raw_materials/);
-* We recommend to use only one of the following roles for each record: Author, Collector, Curator;
-* Current and Historical Affiliation refer to the circumstances when the software were produced and those when the Depository is build, respectively;
-* Notes are optional.
-
-Example of Actor link:
-~~~
-[Name Surname](./actors.md#name-surname)
-~~~
-Example of Item link:
-~~~
-[Item Name](./raw_materials/example_file.zip)
-~~~
-
-
-# SW_NAME Actors
-
-
-* # Name Surname
-  * *Affiliation* 
-     * *Current:* [Example Departement](www.example.com)
-       * *Email:* <surname@example.com> 
-       * *Github handle:* [@github](https://github.com/github)
-       * *Website:* <http://www.example.com/~example/>
-     * *Historical:* [Ancient Example Departement](www.ancient.example.com)
-       * *Email:* <surname@ancient.example.com> 
+# CMM Depository Actors
+* # Carlo Montangero
+  * *Affiliation*
+     * *Current:* [Dipartimento di Informatica](www.di.unipi.it), [Università di Pisa](www.unipi.it)
+       * *Email:* <carlo@montangero.eu>
+       * *Github handle:* [@CarloQMontangero](https://github.com/CarloQMontangero)
+       * *Website:* <http://www.di.unipi.it/~monta/>
+  * *Roles:* Collector
+* # Carlo Traverso
+  * *Roles:* Contributor
+* # Christian Heckler
+  * *Affiliation*
+      * *Historical:*
+         * *Email:* <chh@plato.uni-paderborn.de>
+  * *Roles:* Contributor
+* # Giuseppe Attardi
+  * *Affiliation*
+     * *Current:* [Dipartimento di Informatica](www.di.unipi.it), [Università di Pisa](www.unipi.it)
+       * *Email:* <giuseppe.attardi@unipi.it>
+       * *Github handle:* [@attardi](https://github.com/attardi)
+       * *Website:* <http://www.di.unipi.it/~attardi/>
+     * *Historical:* Dipartimento di Informatica, Università di Pisa
+       * *Email:* <attardi@di.unipi.it>
   * *Roles:* Author
-  
+* # Guido Scatena
+  * *Affiliation*
+     * *Current:* [Dipartimento di Informatica](www.di.unipi.it), [Università di Pisa](www.unipi.it)
+       * *Email:* <guido.scatena@unipi.it>
+       * *Github handle:* [@scatenag](https://github.com/scatenag)
+  * *Roles:* Collector, Curator
+* # Hans J. Boehm
+  * *Affiliation*
+      * *Historical:*
+         * *Email:* <boehm@mti.sgi.com>
+  * *Roles:* Contributor
+* # Joachim Hollman
+  * *Roles:* Contributor
+* # John Abbott
+  * *Roles:* Contributor
+* # Patrick C. Beard
+  * *Affiliation*
+      * *Historical:* Apple
+         * *Email:* <beard@apple.com>
+  * *Roles:* Contributor
+* # Pietro Iglio
+  * *Affiliation*
+      * *Historical:* Dipartimento di Informatica, Università di Pisa
+         * *Email:* <iglio@di.unipi.it>
+  * *Roles:* Author
+* # Roberto Di Cosmo
+  * *Affiliation*
+     * *Current:* [INRIA](http://www.inria.fr/)
+       * *Email:* <roberto@dicosmo.org>
+       * *Github handle:* [@rdicosmo](https://github.com/rdicosmo)
+       * *Website:* <http://www.dicosmo.org/>
+  * *Roles:* Collector* # Tito Flagella
+  * *Affiliation*
+     * *Current:* [Link Srl](https://link.it/linkit2/)
+       * *Email:* <tito@link.it>
+       * *Github handle:* [@tflagella](https://github.com/tflagella)
+     * *Historical:* [Dipartimento di Informatica](www.di.unipi.it), [Università di Pisa](www.unipi.it)
+       * *Email:* <tito@di.unipi.it>
+  * *Roles:* Author
+* # Uttam M. Narsu
+  * *Affiliation*
+      * *Historical:*
+         * *Email:* <narsu@styx.hks.com>
+  * *Roles:* Contributor
