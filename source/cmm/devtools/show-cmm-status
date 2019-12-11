@@ -1,0 +1,57 @@
+#!/bin/sh
+
+# Version maintenance utility by Pietro Iglio (iglio@di.unipi.it)
+#
+# The criteria is:
+#
+# if MY_FILE == ANCESTOR_FILE	=> Skip
+# if MY_FILE != ANCESTOR_FILE =>
+#    if CURRENT_FILE == ANCESTOR_FILE => Copy
+#    if CURRENT_FILE != ANCESTOR_FILE => Merge
+#
+
+MAKE="make -f Makefile.dist"
+
+if [ $# != 3 ] ; then
+    echo "Usage: $0 <my-dir> <current-dir> <ancestor-dir>"
+    exit -1
+fi
+
+for f in $1 $2 $3 ; do
+    if [ ! -d $f ] ; then
+       echo \"$f\" is not a valid path...
+       exit -1
+    fi
+done
+
+MY_DIR=$1
+CURRENT_DIR=$2
+ANCESTOR_DIR=$3
+
+for f in $MY_DIR $CURRENT_DIR $ANCESTOR_DIR ; do
+	(cd $f ; $MAKE clean >/dev/null 2>&1)
+done
+
+for f in $MY_DIR/* ; do
+
+    file=`basename $f`
+    
+    if [ -d $f ] ; then
+       # skip directories
+       echo >/dev/null
+    elif [ ! -f ${ANCESTOR_DIR}/$file ] ; then
+        echo "\"$file\" does not exist in ${ANCESTOR_DIR} (new file?)"
+
+    elif ! cmp $f ${ANCESTOR_DIR}/$file >/dev/null ; then
+
+        # $file changed; check if must be merged or can be copied
+
+        if ! cmp ${CURRENT_DIR}/$file ${ANCESTOR_DIR}/$file >/dev/null ; then
+
+            # somebody else changed the current too: must merge
+            echo "\"$file\" must be merged ----------"
+        else
+            echo "\"$file\" can be copied"
+        fi
+    fi
+done

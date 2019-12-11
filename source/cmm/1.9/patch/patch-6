@@ -1,0 +1,278 @@
+diff -c /home/omega/attardi/posso/cmm/ChangeLog /project/posso/cmm/curr/cmm/ChangeLog
+*** /home/omega/attardi/posso/cmm/ChangeLog	Tue Mar  3 15:21:22 1998
+--- /project/posso/cmm/curr/cmm/ChangeLog	Fri Nov  7 19:45:55 1997
+***************
+*** 1,23 ****
+- 1998-03-03  Giuseppe Attardi  <attardi@di.unipi.it>
+- 
+- 	* version 1.9g released.
+- 	
+- 	* cmm.h (OUTSIDE_HEAPS): checks both NOHEAP and UNCOLLECTEDHEAP
+- 
+- 1998-03-02  Giuseppe Attardi  <attardi@di.unipi.it>
+- 
+- 	* cmm.h, cmm.cpp: added allocAtomic() to allocate block not
+- 	containing pointers.
+- 
+- Tue Feb  3 11:46:48 1998  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.cpp (expandHeap): fix for Linux: fill gap between old and
+- 	new heap.
+- 
+- Wed Jan 28 11:37:11 1998  Giuseppe Attardi  <attardi@omega>
+- 
+- 	* cmm.h (WHEN_FLAGS): added {}
+- 
+  Fri Nov  7 10:40:42 1997  Giuseppe Attardi  <attardi@omega>
+  
+  	* cmm.cpp (verifyHeader): fixed to deal with SCANNED pages.
+--- 1,3 ----
+Common subdirectories: /home/omega/attardi/posso/cmm/Parallel and /project/posso/cmm/curr/cmm/Parallel
+diff -c /home/omega/attardi/posso/cmm/README /project/posso/cmm/curr/cmm/README
+*** /home/omega/attardi/posso/cmm/README	Sun Mar  1 11:17:08 1998
+--- /project/posso/cmm/curr/cmm/README	Fri Nov  7 10:39:52 1997
+***************
+*** 53,60 ****
+   - AIX (RS6000)
+   - SGI
+   - Win32 (Windows 95, Windows NT)
+-  - Digital OS (Alpha)
+-  - MacOS (Metrowerks C++)
+  
+  but it should run without changes also on HPUX, NeXTOS and DOS (djgpp).
+  If you are interest in some other platforms you can send mail to
+--- 53,58 ----
+diff -c /home/omega/attardi/posso/cmm/cmm.cpp /project/posso/cmm/curr/cmm/cmm.cpp
+*** /home/omega/attardi/posso/cmm/cmm.cpp	Tue Mar  3 14:59:21 1998
+--- /project/posso/cmm/curr/cmm/cmm.cpp	Fri Nov  7 19:52:54 1997
+***************
+*** 54,60 ****
+  
+  /* Version tag */
+  
+! char*  Cmm::version = "CMM 1.9g";
+  
+  /*---------------------------------------------------------------------------*
+   *
+--- 54,60 ----
+  
+  /* Version tag */
+  
+! char*  Cmm::version = "CMM 1.9e";
+  
+  /*---------------------------------------------------------------------------*
+   *
+***************
+*** 901,915 ****
+  	new_pageHeap[i] = UNCOLLECTEDHEAP;
+      }
+    else
+!     {
+!       /* Fill gap */
+!       Page gapStart = MIN(lastHeapPage, inc_lastHeapPage);
+!       Page gapEnd = MAX(firstHeapPage, inc_firstHeapPage);
+! 
+!       for (i = gapStart + 1; i < gapEnd; i++)
+!         new_pageHeap[i] = UNCOLLECTEDHEAP;
+!       ::delete (char *)(pageSpace + firstHeapPage); // address of old tables
+!     }
+  
+    pageSpace = new_pageSpace;
+    pageLink = new_pageLink;
+--- 901,907 ----
+  	new_pageHeap[i] = UNCOLLECTEDHEAP;
+      }
+    else
+!     ::delete (char *)(pageSpace + firstHeapPage); // address of old tables
+  
+    pageSpace = new_pageSpace;
+    pageLink = new_pageLink;
+***************
+*** 1730,1741 ****
+  // FromSpace (usedPages - stablePages).
+  // We guess that FromSpace will be reduced to less than 50%:
+  #define USED2FREE_RATIO 2
+! #define enoughPagesLeft(pages) \
+! (usedPages + pages \
+!  <= USED2FREE_RATIO * (freePages + reservedPages - usedPages - pages))
+  
+! GCP
+! DefaultHeap::alloc(Word size)
+  {
+    GCP  object;		/* Pointer to the object */
+  
+--- 1722,1732 ----
+  // FromSpace (usedPages - stablePages).
+  // We guess that FromSpace will be reduced to less than 50%:
+  #define USED2FREE_RATIO 2
+! #define enoughPagesLeft(pages)     (usedPages + pages \
+! 				    <= USED2FREE_RATIO * (freePages + reservedPages - usedPages - pages))
+  
+!      GCP
+!      DefaultHeap::alloc(Word size)
+  {
+    GCP  object;		/* Pointer to the object */
+  
+***************
+*** 1831,1853 ****
+  }
+  
+  /*---------------------------------------------------------------------------*
+-  * -- DefaultHeap::allocAtomic
+-  *
+-  * Results: returns an area which is collected but not traversed since it
+-  * is declared not to contain pointers.
+-  *
+-  *---------------------------------------------------------------------------*/
+- 
+- GCP
+- DefaultHeap::allocAtomic(Word size)
+- {
+- 
+-   Ptr area = (Ptr) new (size, this) CmmVarObject;
+-   area += sizeof(CmmVarObject);
+-   return (GCP)area;
+- }
+- 
+- /*---------------------------------------------------------------------------*
+   * -- isTraced
+   *
+   * Results: true if the object is checked by the garbage collector.
+--- 1822,1827 ----
+***************
+*** 1860,1873 ****
+    extern int end;
+    if (
+  #     ifdef _WIN32
+!       printf("in text?\n")
+  #     else
+!       obj >= (void *)(&end)
+  #     endif
+  #     ifdef STACK_GROWS_DOWNWARD
+!       && obj < (void *)(&obj)
+  #     else
+!       && obj > (void *)(&obj)
+  #     endif
+        )
+      {
+--- 1834,1847 ----
+    extern int end;
+    if (
+  #     ifdef _WIN32
+!       printf("in text?\n") &&
+  #     else
+!       obj >= (void *)(&end) &&
+  #     endif
+  #     ifdef STACK_GROWS_DOWNWARD
+!       obj < (void *)(&obj)
+  #     else
+!       obj > (void *)(&obj)
+  #     endif
+        )
+      {
+diff -c /home/omega/attardi/posso/cmm/cmm.h /project/posso/cmm/curr/cmm/cmm.h
+*** /home/omega/attardi/posso/cmm/cmm.h	Tue Mar  3 15:02:40 1998
+--- /project/posso/cmm/curr/cmm/cmm.h	Fri Nov  7 10:10:10 1997
+***************
+*** 311,323 ****
+   *---------------------------------------------------------------------------*/
+  
+  #ifdef CMM_VERBOSE
+!   #define WHEN_VERBOSE(flag, code)	if (Cmm::verbose & flag) {code;}
+  #else
+    #define WHEN_VERBOSE(flag, code)
+  #endif
+  
+  #ifdef CMM_FEATURES
+!   #define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) {code;}
+  #else
+    #define WHEN_FLAGS(flag, code)
+  #endif
+--- 311,323 ----
+   *---------------------------------------------------------------------------*/
+  
+  #ifdef CMM_VERBOSE
+!   #define WHEN_VERBOSE(flag, code)	if (Cmm::verbose & flag) code
+  #else
+    #define WHEN_VERBOSE(flag, code)
+  #endif
+  
+  #ifdef CMM_FEATURES
+!   #define WHEN_FLAGS(flag, code)	if (Cmm::flags & flag) code
+  #else
+    #define WHEN_FLAGS(flag, code)
+  #endif
+***************
+*** 513,519 ****
+  
+  #define OUTSIDE_HEAPS(page) \
+  	(page < firstHeapPage || page > lastHeapPage || \
+! 	 (Word)pageHeap[page] <= (Word)UNCOLLECTEDHEAP)
+  
+  #define HEAPPERCENT(x) (((x)*100)/(Cmm::theDefaultHeap->reservedPages \
+  			+ freePages))
+--- 513,519 ----
+  
+  #define OUTSIDE_HEAPS(page) \
+  	(page < firstHeapPage || page > lastHeapPage || \
+! 	 pageHeap[page] == UNCOLLECTEDHEAP)
+  
+  #define HEAPPERCENT(x) (((x)*100)/(Cmm::theDefaultHeap->reservedPages \
+  			+ freePages))
+***************
+*** 606,613 ****
+  
+    virtual void scavenge(CmmObject **) {};
+  
+-   inline GCP allocAtomic(Word size) { return alloc(size); };
+- 
+    inline bool inside(GCP ptr)
+      {
+        Page page = GCPtoPage(ptr); // Page number
+--- 606,611 ----
+***************
+*** 662,668 ****
+  
+    DefaultHeap();
+    GCP alloc(Word);
+-   GCP allocAtomic(Word);
+    void reclaim(GCP) {}		// Bartlett's delete does nothing.
+    void collect();		// the default garbarge collector
+    void scavenge(CmmObject **);
+--- 660,665 ----
+***************
+*** 697,703 ****
+  
+    MarkAndSweep();
+    inline GCP 	alloc(Word size){ return (GCP) mswAlloc(size); }
+-   inline GCP	allocAtomic(Word size) { return (GCP) mswAllocOpaque(size); }
+    inline void	reclaim(GCP p)	{ mswFree(p); }
+    inline void	collect()	{ mswCollect(); }
+    inline void*	realloc(void * p, Word size)	{ return mswRealloc(p, size); }
+--- 694,699 ----
+Common subdirectories: /home/omega/attardi/posso/cmm/doc and /project/posso/cmm/curr/cmm/doc
+diff -c /home/omega/attardi/posso/cmm/msw.cpp /project/posso/cmm/curr/cmm/msw.cpp
+*** /home/omega/attardi/posso/cmm/msw.cpp	Mon Mar  2 10:10:36 1998
+--- /project/posso/cmm/curr/cmm/msw.cpp	Fri Nov  7 17:26:13 1997
+***************
+*** 519,525 ****
+--- 519,527 ----
+  #	endif
+  
+  	assert(size);
++ 
+  	size = ROUND_UP(size, PtrSize);
++ 
+  	mswGetStatsDEBUG(size);
+  
+  	if (size >= MaxFixedSize)
+***************
+*** 533,538 ****
+--- 535,541 ----
+  	assert(freePage->objSize == size);
+  
+  	freeList = freePage->freeList;
++ 
+  	freePage->allocatedObjs += 1;
+  	*freeList = AllocMask;
+  	*(freeList-1) = TransparentMask;

@@ -1,0 +1,292 @@
+
+HeapStack.H,1036
+#define _HeapStack_h17,511
+class ContainerBodyContainerBody29,886
+class ContainerContainer39,999
+  int size(Container::size49,1141
+class ContainerStack:ContainerStack58,1247
+  void reset(ContainerStack::reset62,1347
+  void WeakReset(ContainerStack::WeakReset66,1405
+  int room(ContainerStack::room67,1437
+  int used(ContainerStack::used68,1481
+  inline GcObject *current(ContainerStack::current70,1513
+  inline GcObject *bottom(ContainerStack::bottom72,1613
+  inline int inside(ContainerStack::inside75,1794
+  ContainerStack(ContainerStack::ContainerStack79,1891
+class RootSetRootSet89,2046
+  void ScanSystemRoots(RootSet::ScanSystemRoots93,2094
+class HeapStack:HeapStack132,3022
+  inline GCP alloc(HeapStack::alloc141,3187
+  inline GcObject* insert(HeapStack::insert145,3258
+  inline Container *inside(HeapStack::inside151,3364
+  inline int outside(HeapStack::outside157,3528
+class BBStack BBStack165,3685
+  BBStack(BBStack::BBStack174,3798
+  ContainerStack *inside(BBStack::inside211,4484
+
+cmm.H,2896
+#define _CMM_H241,9790
+#define bool 244,9819
+#define false 245,9836
+#define true 246,9852
+typedef int  *GCP;GCP261,10158
+class  gcheap gcheap282,10845
+#define MAKE_CALLBACK(309,11675
+#define MAKE_HEADER(310,11724
+#define FORWARDED(311,11789
+#define SET_FORWARD(312,11837
+#define HEADER_CALLBACK(314,11897
+#define HEADER_WORDS(315,11954
+#define HEADER_BYTES(316,12008
+#define ONEPAGEOBJ_WORDS 318,12097
+#define HEADER_PAGES(319,12137
+#define ONEPAGEOBJ_WORDS 321,12219
+#define HEADER_PAGES(322,12255
+#define MAX_HEADER_WORDS 324,12340
+#define MAX_HEADER_CALLBACK 325,12406
+#define WORD_INDEX(347,13101
+#define BIT_INDEX(348,13139
+#define ISA_OBJECTMAP(350,13184
+#define SET_OBJECTMAP(351,13256
+#define CLEAR_OBJECTMAP(352,13329
+#define MARKED(354,13406
+#define MARK(355,13465
+typedef void (*GCCALLBACKPROC)GCCALLBACKPROC364,13796
+struct  callback_struct callback_struct366,13864
+#define BYTESxPAGE 381,14326
+#define WORDSxPAGE 382,14349
+#define BYTESxWORD 383,14395
+#define	BITSxWORD 384,14428
+#define	BYTEStoWORDS(390,14543
+#define UNALLOCATEDPAGE 394,14633
+#define STABLE(395,14660
+#define UNSTABLE(396,14695
+#define PAGE_to_GCP(400,14781
+#define GCP_to_PAGE(401,14828
+#define NOHEAP 403,14874
+#define UNCOLLECTEDHEAP 404,14894
+#define OUTSIDE_HEAP(406,14934
+#define HEAPPERCENT(410,15052
+#define WHEN_FLAGS(413,15112
+#define WHEN_FLAGS(415,15176
+class CmmHeapCmmHeap423,15379
+  virtual void reclaim(CmmHeap::reclaim429,15447
+  virtual void collect(CmmHeap::collect432,15523
+  virtual void scavenge(CmmHeap::scavenge436,15633
+  bool outside(CmmHeap::outside438,15675
+  int id(CmmHeap::id446,15888
+class UncollectedHeap:UncollectedHeap462,16176
+  GCP alloc(UncollectedHeap::alloc466,16225
+  void reclaim(UncollectedHeap::reclaim468,16278
+class DefaultHeap:DefaultHeap480,16563
+  void reclaim(DefaultHeap::reclaim486,16631
+  void scavenge(DefaultHeap::scavenge490,16748
+class GcObjectGcObject528,17848
+  void traverse(GcObject::traverse532,17874
+  virtual void traverse(GcObject::traverse533,17915
+  virtual ~GcObject(GcObject::~GcObject534,17953
+  CmmHeap *heap(GcObject::heap536,17981
+  inline int size(GcObject::size540,18049
+  inline int words(GcObject::words541,18113
+  inline void mark(GcObject::mark544,18193
+  inline bool Marked(GcObject::Marked548,18246
+  inline int forwarded(GcObject::forwarded553,18319
+  inline void SetForward(GcObject::SetForward554,18385
+  inline GcObject *GetForward(GcObject::GetForward555,18459
+  inline GcObject *next(GcObject::next556,18534
+class GcVarObject:GcVarObject562,18702
+class GcArray GcArray584,19316
+  void * operator new(GcArray::new589,19353
+  void traverse(GcArray::traverse611,20001
+inline void CmmHeap::visit(624,20236
+class _CmmInit_CmmInit639,20588
+  _CmmInit(_CmmInit::_CmmInit642,20613
+  ~_CmmInit(_CmmInit::~_CmmInit652,20791
+
+HeapStack.C,764
+Container::Container(22,556
+void Container::reset(36,950
+GCP ContainerStack::alloc(77,1831
+GcObject *ContainerStack::insert(88,2101
+void ContainerStack::traverse(109,2718
+RootSet::RootSet(125,3214
+void RootSet::set(146,3562
+void RootSet::unset(170,4086
+GcObject *RootSet::get(178,4238
+void RootSet::setp(192,4469
+void RootSet::unsetp(216,5007
+GcObject **RootSet::getp(224,5165
+void RootSet::reset(238,5406
+void RootSet::scan(244,5464
+void HeapStack::scavenge(256,5813
+HeapStack::HeapStack(279,6281
+void HeapStack::collect(285,6425
+void BBStack::expand(322,7238
+GCP BBStack::alloc(341,7619
+GcObject *BBStack::insert(350,7776
+void swap(360,7938
+void BBStack::scavenge(368,8070
+void BBStack::collect(450,9812
+void BBStack::WeakReset(508,11018
+
+cmm.C,1571
+#define STACK_GROWS_DOWNWARD93,3602
+#define STATIC_0 104,3735
+#define STATIC_1 105,3773
+#define	DOUBLE_ALIGN 110,3853
+#define STATIC_0 124,4004
+#define STATIC_1 125,4075
+#define STATIC_0 144,4316
+#define STATIC_1 145,4387
+#define STATIC_0 158,4528
+#define STATIC_1 159,4599
+#define OBJECT 198,6002
+#define CONTINUED 199,6019
+gcheap::gcheap(260,8741
+static  void freespace_pointers(321,10984
+int  gcregistercallback(331,11243
+CmmHeap::CmmHeap(358,12150
+#define	    roots_inc 374,12613
+static struct  roots_struct roots_struct377,12670
+void  gcroots(387,12910
+void  gcunroots(411,13508
+static int  environment_value(431,13916
+CmmInitInner(456,14569
+#define DEBUG474,14991
+static void  CmmInit(484,15231
+static int  shouldexpandheap(574,18497
+static void  dummy_new_handler(583,18711
+static int  expandheap(591,18892
+static GCP  next_object(724,23412
+static void  stableset_to_current(742,23985
+static inline int  next_page(760,24435
+static void  queue(767,24619
+static void  promote_page(781,24923
+GcObject *basePointer(822,25980
+GCP gcmove(838,26360
+void DefaultHeap::collect(941,29270
+GCP  allocate_page(1108,34272
+GCP  DefaultHeap::reserve_pages(1160,35988
+GCP DefaultHeap::alloc(1218,37813
+int gcobject(1289,39556
+void* GcObject::operator new(1309,40026
+void GcObject::operator delete(1322,40419
+void* GcVarObject::operator new(1327,40523
+static void  verify_object(1351,41308
+static void  verify_header(1381,42145
+void  newline_if_logging(1419,43148
+static void  log_root(1427,43324
+static void  memory_stats(1446,43896
+
+demo1.C,63
+class cell cell3,24
+void cell::traverse(15,369
+main(22,586
+
+demo2.C,84
+struct  cell cell3,24
+void cell::traverse(10,128
+cell::cell(15,206
+main(22,282
+
+gctest.C,355
+struct  cell cell9,112
+typedef  cell* CP;CP20,338
+void cell::traverse(22,358
+cell::cell(29,481
+struct vector vector36,597
+typedef  vector* VP;VP47,791
+void vector::traverse(49,813
+vector::vector(55,929
+void  printtree(68,1104
+void  listtest1(88,1391
+void  vectortest(115,1865
+CP  treetest(142,2368
+void  listtest2(161,2655
+main(196,3273
+
+hstest.C,355
+struct  cell cell9,118
+typedef  cell* CP;CP20,341
+void cell::traverse(22,361
+cell::cell(29,484
+struct vector vector36,600
+typedef  vector* VP;VP47,794
+void vector::traverse(49,816
+vector::vector(55,932
+void  printtree(68,1107
+void  listtest1(88,1394
+void  vectortest(115,1868
+CP  treetest(142,2371
+void  listtest2(161,2658
+main(196,3276
+
+test1.C,350
+#define	RLIMIT_CPU	15,223
+#define	RLIMIT_FSIZE	16,276
+#define	RLIMIT_DATA	17,324
+#define	RLIMIT_STACK	18,363
+#define	RLIMIT_CORE	19,404
+#define	RLIMIT_RSS	20,448
+#define	RLIM_NLIMITS	22,495
+#define	RLIM_INFINITY	24,552
+struct rlimit rlimit26,586
+void  calltest(39,847
+struct  block block54,1244
+void  allocatetest(60,1348
+main(76,1779
+
+test2.C,153
+struct  cell cell13,264
+void cell::traverse(21,384
+cell::cell(27,502
+typedef  cell* cellptr;cellptr33,546
+struct  cella cella37,635
+main(44,767
+
+test3.C,133
+#define MB 15,309
+struct  block block19,384
+void block::traverse(26,515
+block::block(31,594
+void  makeheap(37,696
+main(42,809
+
+test4.C,285
+struct  big_cell big_cell16,376
+void big_cell::traverse(25,524
+big_cell::big_cell(31,642
+typedef  big_cell* bp;bp36,684
+struct  little_cell little_cell38,708
+void little_cell::traverse(47,868
+little_cell::little_cell(53,989
+typedef  little_cell* lp;lp58,1037
+main(62,1133
+
+test5.C,355
+struct  cell cell9,118
+typedef  cell* CP;CP18,278
+void cell::traverse(20,298
+cell::cell(27,421
+struct vector vector34,537
+typedef  vector* VP;VP45,731
+void vector::traverse(47,753
+vector::vector(53,869
+void  printtree(66,1044
+void  listtest1(86,1331
+void  vectortest(113,1814
+CP  treetest(140,2326
+void  listtest2(159,2631
+main(194,3249
+
+test6.C,114
+class MyClass MyClass3,24
+  void test(MyClass::test8,83
+  void traverse(MyClass::traverse9,130
+main(13,203
+
+test7.C,15
+int main(5,76
+
+utils.C,22
+showHeapPages(17,481
